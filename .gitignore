@@ -1,0 +1,151 @@
+# ============================================
+# PYTHON
+# ============================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ============================================
+# ENTORNOS VIRTUALES
+# ============================================
+.venv/
+venv/
+ENV/
+env/
+.env
+.env.local
+.env.*.local
+
+# ============================================
+# IDE / EDITORES
+# ============================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# ============================================
+# JUPYTER NOTEBOOKS
+# ============================================
+.ipynb_checkpoints/
+*.ipynb
+
+# ============================================
+# DATOS Y BASES DE DATOS
+# ============================================
+data/
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.csv
+*.parquet
+*.json
+*.xlsx
+
+# ============================================
+# LOGS
+# ============================================
+logs/
+*.log
+airflow/logs/
+dags/logs/
+
+# ============================================
+# DOCKER
+# ============================================
+.docker/
+docker-compose.override.yml
+
+# ============================================
+# AIRFLOW
+# ============================================
+airflow.cfg
+airflow.db
+airflow-webserver.cfg
+standalone_admin_password.txt
+webserver_config.py
+
+# ============================================
+# STREAMLIT
+# ============================================
+.streamlit/secrets.toml
+
+# ============================================
+# TESTING / COBERTURA
+# ============================================
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# ============================================
+# SISTEMAS OPERATIVOS
+# ============================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ============================================
+# SEGURIDAD / SECRETOS
+# ============================================
+*.pem
+*.key
+*.crt
+secrets/
+credentials/
+*.secret
+
+# ============================================
+# MINIO / QDRANT (datos locales)
+# ============================================
+minio_data/
+qdrant_storage/
+postgres_data/
+redis_data/
+
+# ============================================
+# MOSQUITTO
+# ============================================
+mosquitto/data/
+mosquitto/log/
+
+# ============================================
+# DOCUMENTOS GENERADOS
+# ============================================
+*.pdf
+!docs/*.pdf
+*.docx
+*.pptx
