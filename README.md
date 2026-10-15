@@ -5,7 +5,8 @@
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-green.svg)](https://fastapi.tiangolo.com/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.40-red.svg)](https://streamlit.io/)
-[![Airflow](https://img.shields.io/badge/Airflow-2.10-blue.svg)](https://airflow.apache.org/)
+[![SQLite](https://img.shields.io/badge/SQLite-3.x-lightblue.svg)](https://www.sqlite.org/)
+[![Pytest](https://img.shields.io/badge/Pytest-8.3-orange.svg)](https://pytest.org/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ---
@@ -14,47 +15,34 @@
 
 - [Descripción General](#-descripción-general)
 - [Problemática](#-problemática)
-- [Arquitectura](#-arquitectura)
-- [Tecnologías Utilizadas](#-tecnologías-utilizadas)
+- [Arquitectura del MVP](#️-arquitectura-del-mvp)
+- [Tecnologías Utilizadas](#️-tecnologías-utilizadas)
 - [Estructura del Repositorio](#-estructura-del-repositorio)
 - [Requisitos Previos](#-requisitos-previos)
 - [Instalación](#-instalación)
-  - [Opción 1: Instalación Local](#opción-1-instalación-local)
-  - [Opción 2: Docker Compose](#opción-2-docker-compose)
-  - [Opción 3: Docker + Airflow](#opción-3-docker--airflow)
 - [Uso del Sistema](#-uso-del-sistema)
-  - [1. Iniciar la API de Ingesta](#1-iniciar-la-api-de-ingesta)
-  - [2. Ejecutar el Simulador de Telemetría](#2-ejecutar-el-simulador-de-telemetría)
-  - [3. Iniciar el Dashboard](#3-iniciar-el-dashboard)
-  - [4. Sincronización por Lotes](#4-sincronización-por-lotes)
-  - [5. Orquestación con Airflow](#5-orquestación-con-airflow)
-- [Pruebas Unitarias](#-pruebas-unitarias)
 - [API Reference](#-api-reference)
-- [Configuración](#-configuración)
+- [Pruebas Unitarias](#-pruebas-unitarias)
+- [Variables de Entorno](#-variables-de-entorno)
 - [Estructura de la Base de Datos](#-estructura-de-la-base-de-datos)
-- [Solución de Problemas](#-solución-de-problemas)
-- [Contribuciones](#-contribuciones)
 - [Autores](#-autores)
-- [Licencia](#-licencia)
 - [Referencias](#-referencias)
 
 ---
 
 ## 🌎 Descripción General
 
-**AmazonIA 4.0** es una arquitectura de datos inteligente en el borde (Edge Computing) diseñada para el procesamiento de telemetría microclimática en estaciones meteorológicas comunitarias de la cuenca del río Caroní, estado Bolívar, Venezuela.
+**AmazonIA 4.0** es una arquitectura de datos inteligente en el borde *(Edge Computing)* diseñada para el procesamiento de telemetría microclimática en estaciones meteorológicas comunitarias de la cuenca del río Caroní, estado Bolívar, Venezuela.
 
-El sistema aborda la **asimetría de información** en la región mediante la integración de:
+El sistema aborda la **asimetría de información** en la región mediante:
 
-- **Edge Computing** para el procesamiento local de datos
-- **Offline-First** para garantizar la continuidad operativa ante cortes de red
-- **Validación de calidad** en tiempo real (marco Data Quality)
-- **Arquitectura Lakehouse** (Medallion: Bronze, Silver, Gold)
-- **Orquestación con Apache Airflow**
-- **Memoria semántica (RAG)** con bases vectoriales
-- **Gobernanza y privacidad** (RBAC + anonimización)
+- **Edge Computing** — procesamiento local de datos en el borde de la red
+- **Offline-First** — buffer SQLite que garantiza continuidad operativa ante cortes de red
+- **Validación de calidad** en tiempo real, clasificando datos como `valid`, `invalid` o `incomplete`
+- **Sincronización por lotes** — reenvío automático con reintentos y backoff exponencial
+- **Visualización interactiva** — dashboard en tiempo real con alertas configurables
 
-Este repositorio contiene el **Producto Mínimo Viable (MVP)** que implementa los componentes esenciales de la arquitectura descrita en el informe técnico.
+Este repositorio contiene el **Producto Mínimo Viable (MVP)** que implementa los componentes esenciales de la arquitectura.
 
 ---
 
@@ -62,419 +50,434 @@ Este repositorio contiene el **Producto Mínimo Viable (MVP)** que implementa lo
 
 La cuenca del río Caroní enfrenta:
 
-- **Escasez de estaciones de monitoreo** microclimático
+- **Escasez de estaciones de monitoreo** microclimático en zonas rurales
 - **Inestabilidad eléctrica** que provoca pérdida de telemetría
-- **Conectividad intermitente** que impide transmisión continua
-- **Dependencia de arquitecturas centralizadas** en la nube
-- **Datos aislados sin interpretación contextual** para las comunidades
+- **Conectividad intermitente** que impide transmisión continua a la nube
+- **Dependencia de arquitecturas centralizadas** sin resiliencia local
+- **Datos sin interpretación contextual** para las comunidades locales
 
 Las consecuencias incluyen series temporales incompletas, imposibilidad de generar alertas tempranas y decisiones agrícolas basadas en percepciones subjetivas.
 
 ---
 
-## 🏗️ Arquitectura
+## 🏗️ Arquitectura del MVP
 
-La arquitectura se estructura en **cinco capas funcionales**:
-┌─────────────────────────────────────────────────────────────────┐
-│ FUENTES DE DATOS                                                │
-│ Sensores IoT │ Satélites │ Comunidades (audios, PDFs)           │
-└─────────────────────────────────────────────────────────────────┘
-↓
-┌─────────────────────────────────────────────────────────────────┐
-│ CAPA DE INGESTA                                                 │
-│ Edge Gateway (Raspberry Pi + SQLite) │ LoRaWAN/MQTT │ Kafka     │
-│ ─────────── Offline-First ───────────                           │
-└─────────────────────────────────────────────────────────────────┘
-↓
-┌─────────────────────────────────────────────────────────────────┐
-│ CAPA DE ALMACENAMIENTO (LAKEHOUSE)                              │
-│ MinIO + Delta Lake                                              │
-│ Bronze (crudo) → Silver (validado) → Gold (agregaciones)        │
-└─────────────────────────────────────────────────────────────────┘
-↓
-┌─────────────────────────────────────────────────────────────────┐
-│ CAPA DE PROCESAMIENTO                                           │
-│ Apache Spark │ Apache Airflow │ Python (validación)             │
-└─────────────────────────────────────────────────────────────────┘
-↓
-┌─────────────────────────────────────────────────────────────────┐
-│ CAPA ANALÍTICA / IA                                             │
-│ Qdrant (vectores) │ RAG │ Modelos ML                            │
-└─────────────────────────────────────────────────────────────────┘
-↓
-┌─────────────────────────────────────────────────────────────────┐
-│ CAPA DE CONSUMO                                                 │
-│ Streamlit (dashboard) │ Alertas (Telegram/SMS) │ Agentes IA     │
-└─────────────────────────────────────────────────────────────────┘
+El MVP implementa las siguientes capas:
 
+```
+┌─────────────────────────────────────────────────────────────┐
+│  FUENTES DE DATOS                                           │
+│  Sensores IoT (simulados: CARONI-001, CARONI-002)           │
+└─────────────────────────┬───────────────────────────────────┘
+                          │ HTTP POST / MQTT (paho-mqtt)
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│  CAPA DE INGESTA — Edge Gateway                             │
+│  FastAPI  ·  Motor de Validación  ·  Mosquitto MQTT         │
+│  ─────────────── Offline-First ─────────────────            │
+└─────────────────────────┬───────────────────────────────────┘
+                          │ SQLite (buffer local)
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│  PERSISTENCIA LOCAL                                         │
+│  SQLite  ·  Sincronización por Lotes (HTTP batch)           │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│  CAPA DE CONSUMO                                            │
+│  Streamlit Dashboard  ·  Alertas en tiempo real             │
+└─────────────────────────────────────────────────────────────┘
+```
 
-**Gobernanza transversal:** RBAC + Anonimización
+### Flujo de calidad de datos
+
+Cada lectura se clasifica según el marco de Buelvas et al. (2023):
+
+| Estado | Condición |
+|---|---|
+| `valid` | Todos los campos presentes y dentro de rangos físicos |
+| `invalid` | Valor fuera de rango o tipo de dato incorrecto |
+| `incomplete` | Campo numérico ausente (pero campos obligatorios presentes) |
 
 ---
 
 ## 🛠️ Tecnologías Utilizadas
 
 | Componente | Tecnología | Versión | Función |
-| :--- | :--- | :--- | :--- |
-| **API de Ingesta** | FastAPI | 0.115+ | Recepción y validación de telemetría |
-| **Persistencia Local** | SQLite | 3.x | Buffer local Offline-First |
-| **Dashboard** | Streamlit | 1.40+ | Visualización interactiva |
-| **Visualización** | Plotly | 5.24+ | Gráficos interactivos |
-| **Orquestación** | Apache Airflow | 2.10+ | Pipelines automatizados |
-| **Procesamiento** | Apache Spark | 3.5+ | Transformación de datos |
-| **Almacenamiento** | MinIO + Delta Lake | Latest | Lakehouse (Medallion) |
-| **Base Vectorial** | Qdrant | Latest | Memoria semántica (RAG) |
-| **Contenedores** | Docker + Compose | Latest | Despliegue portable |
-| **Pruebas** | Pytest | 8.3+ | Pruebas unitarias |
+|:---|:---|:---|:---|
+| **API de Ingesta** | FastAPI | 0.115 | Recepción y validación de telemetría |
+| **Servidor ASGI** | Uvicorn | 0.32 | Servidor de producción para FastAPI |
+| **Modelos de datos** | Pydantic | 2.9 | Validación y serialización de esquemas |
+| **Persistencia local** | SQLite | 3.x | Buffer local Offline-First |
+| **Dashboard** | Streamlit | 1.40 | Visualización interactiva en tiempo real |
+| **Gráficos** | Plotly | 5.24 | Gráficos y series temporales interactivos |
+| **Análisis de datos** | Pandas | 2.x | Manipulación tabular en el dashboard |
+| **Mensajería IoT** | Mosquitto (MQTT) | 2.x | Broker para publicación de sensores |
+| **Cliente MQTT** | paho-mqtt | 2.x | Publicador y suscriptor en Python |
+| **Sincronización** | requests / httpx | 2.32 / 0.28 | Sincronización por lotes vía HTTP |
+| **Contenedores** | Docker + Compose | Latest | Despliegue portable de servicios |
+| **Pruebas** | Pytest | 8.3 | Suite de pruebas unitarias (25 tests) |
 | **Lenguaje** | Python | 3.11+ | Desarrollo principal |
 
 ---
 
 ## 📁 Estructura del Repositorio
 
+```
 amazonia4.0-mvp/
 │
-├── README.md # Este archivo
-├── requirements.txt # Dependencias de Python
-├── docker-compose.yml # Despliegue completo con Docker
-├── docker-compose.airflow.yml # Despliegue de Airflow
-├── .env.example # Variables de entorno de ejemplo
-├── .gitignore # Archivos ignorados por Git
-├── LICENSE # Licencia MIT
+├── README.md                    # Este archivo
+├── requirements.txt             # Dependencias de Python
+├── proyect.toml                 # Configuración de herramientas (pytest, ruff, black)
+├── docker-compose.yml           # Despliegue completo con Docker
+├── dockerfile                   # Imagen base del proyecto
+├── makefile                     # Comandos de desarrollo
+├── .env.example                 # Variables de entorno de ejemplo
+├── .gitignore
 │
-├── src/ # Código fuente del MVP
-│ ├── init.py
-│ ├── config.py # Configuración central
-│ ├── database.py # Persistencia en SQLite
-│ ├── validacion.py # Motor de calidad de datos
-│ ├── api.py # API de ingesta (FastAPI)
-│ ├── simulador.py # Simulador de estaciones
-│ ├── sincronizacion.py # Sincronización por lotes
-│ └── dashboard.py # Dashboard (Streamlit)
+├── src/                         # Código fuente del MVP
+│   ├── __init__.py
+│   ├── config.py                # Configuración central y rangos de validación
+│   ├── database.py              # Persistencia SQLite (Offline-First)
+│   ├── validacion.py            # Motor de calidad de datos
+│   ├── api.py                   # API de ingesta (FastAPI)
+│   ├── simulador.py             # Simulador de estaciones meteorológicas
+│   ├── sincronizacion.py        # Sincronización por lotes con reintentos
+│   └── dashboard.py             # Dashboard interactivo (Streamlit)
 │
-├── tests/ # Pruebas unitarias
-│ ├── init.py
-│ ├── test_validacion.py # Pruebas de validación
-│ ├── test_api.py # Pruebas de API
-│ └── test_database.py # Pruebas de base de datos
+├── tests/                       # Pruebas unitarias (25 tests)
+│   ├── __init__.py
+│   ├── test_api.py              # Pruebas de endpoints FastAPI (7 tests)
+│   ├── test_database.py         # Pruebas de persistencia SQLite (7 tests)
+│   └── test_validacion.py       # Pruebas del motor de calidad (11 tests)
 │
-├── dags/ # DAGs de Airflow
-│ ├── pipeline_amazonia.py # DAG principal
-│ ├── utils/
-│ │ └── edge_sync.py # Utilidades de sincronización
-│ ├── scripts/
-│ │ ├── bronze_to_silver.py # Spark: Bronze → Silver
-│ │ ├── silver_to_gold.py # Spark: Silver → Gold
-│ │ └── rag_indexer.py # Indexador para Qdrant
-│ └── config/
-│ └── airflow.cfg # Configuración de Airflow
+├── dags/                        # DAGs de Apache Airflow
+│   ├── pipeline_amazonia.py     # DAG principal del pipeline
+│   ├── utils/
+│   ├── scripts/
+│   └── config/
 │
-├── data/ # Datos (generados en ejecución)
-│ └── telemetria.db # Base de datos SQLite
+├── mosquitto/                   # Configuración del broker MQTT
+│   └── config/
+│       └── mosquitto.conf
 │
-├── docs/ # Documentación adicional
-│ ├── arquitectura.md # Detalles de la arquitectura
-│ ├── api_reference.md # Referencia de la API
-│ └── manual_usuario.md # Manual de usuario
-│
-└── mosquitto/ # Configuración MQTT (fase futura)
-└── config/
-└── mosquitto.conf
-
+└── data/                        # Generado en tiempo de ejecución
+    └── telemetria.db            # Base de datos SQLite
+```
 
 ---
 
 ## ✅ Requisitos Previos
 
-Antes de comenzar, asegúrate de tener instalado:
-
 - **Python 3.11 o superior** — [Descargar](https://www.python.org/downloads/)
-- **pip** (gestor de paquetes de Python)
 - **Git** — [Descargar](https://git-scm.com/)
-- **Docker** (opcional, para despliegue con contenedores) — [Descargar](https://www.docker.com/)
-- **Docker Compose** (opcional) — [Descargar](https://docs.docker.com/compose/)
-
-**Verificar instalación:**
+- **Docker** *(opcional, para despliegue con contenedores)* — [Descargar](https://www.docker.com/)
 
 ```bash
-python --version    # Debe mostrar Python 3.11+
-pip --version       # Debe mostrar pip 23+
-git --version       # Debe mostrar git 2.40+
+python --version    # Python 3.11+
+git --version       # git 2.x
 docker --version    # Opcional
 ```
 
+---
 
-🚀 Instalación
-Opción 1: Instalación Local
-Paso 1: Clonar el repositorio
+## 🚀 Instalación
 
+### Opción 1: Instalación Local
 
-git clone https://github.com/tu-usuario/amazonia4.0-mvp.git
+```bash
+# 1. Clonar el repositorio
+git clone https://github.com/rodriguezjr/amazonIA.git
 cd amazonia4.0-mvp
-Paso 2: Crear entorno virtual
 
-
-# Linux/macOS
+# 2. Crear entorno virtual
 python -m venv .venv
-source .venv/bin/activate
 
 # Windows
-python -m venv .venv
 .venv\Scripts\activate
-Paso 3: Instalar dependencias
+# Linux/macOS
+source .venv/bin/activate
 
-
+# 3. Instalar dependencias
 pip install --upgrade pip
 pip install -r requirements.txt
-Paso 4: Configurar variables de entorno
 
-
+# 4. Configurar variables de entorno
 cp .env.example .env
-# Editar .env según sea necesario
-Paso 5: Inicializar la base de datos
 
-
+# 5. Inicializar la base de datos
 python -c "from src.database import init_database; init_database()"
-Paso 6: Verificar instalación
 
-
+# 6. Verificar instalación (deben pasar 25 tests)
 pytest tests/ -v
-Si todas las pruebas pasan, la instalación fue exitosa.
+```
 
-Opción 2: Docker Compose
-Paso 1: Clonar el repositorio
+### Opción 2: Docker Compose
 
-
-git clone https://github.com/tu-usuario/amazonia4.0-mvp.git
+```bash
+# Clonar y levantar todos los servicios
+git clone https://github.com/rodriguezjr/amazonIA.git
 cd amazonia4.0-mvp
-Paso 2: Construir y levantar los servicios
-
-
 docker-compose up --build -d
-Paso 3: Verificar que los servicios estén corriendo
 
-
+# Verificar estado de los servicios
 docker-compose ps
-Deberías ver:
+```
 
-text
-NAME                    STATUS
-amazonia-api            Up
-amazonia-dashboard      Up
-amazonia-simulador      Up
-Paso 4: Acceder a los servicios
+Servicios disponibles tras el despliegue:
 
-API: http://localhost:8000/docs
+| Servicio | URL | Descripción |
+|---|---|---|
+| API (Swagger) | http://localhost:8000/docs | Documentación interactiva |
+| API (Health) | http://localhost:8000/health | Estado del sistema |
+| Dashboard | http://localhost:8501 | Visualización de telemetría |
+| Mosquitto MQTT | localhost:1883 | Broker MQTT |
+| MinIO | http://localhost:9001 | Almacenamiento de objetos |
 
-Dashboard: http://localhost:8501
-
-Paso 5: Detener los servicios
-
-
+```bash
+# Detener todos los servicios
 docker-compose down
-Opción 3: Docker + Airflow
-Paso 1: Levantar los servicios base
+```
 
+---
 
-docker-compose up --build -d
-Paso 2: Levantar Airflow
+## 🎯 Uso del Sistema
 
+### 1. Iniciar la API de Ingesta
 
-docker-compose -f docker-compose.airflow.yml up -d
-Paso 3: Inicializar Airflow (primera vez)
-
-
-docker-compose -f docker-compose.airflow.yml exec airflow-webserver airflow db init
-docker-compose -f docker-compose.airflow.yml exec airflow-webserver airflow users create \
-    --username admin \
-    --password admin \
-    --firstname Admin \
-    --lastname User \
-    --role Admin \
-    --email admin@amazonia4.0.org
-Paso 4: Acceder a Airflow
-
-Airflow UI: http://localhost:8080
-
-Usuario: admin
-
-Contraseña: admin
-
-Paso 5: Activar el DAG
-
-En la UI de Airflow, busca el DAG amazonia_4_0_pipeline y actívalo con el toggle.
-
-
-🎯 Uso del Sistema
-1. Iniciar la API de Ingesta
-La API recibe los datos de telemetría, los valida y los almacena en SQLite.
-
-bash
-# Opción local
+```bash
 uvicorn src.api:app --host 0.0.0.0 --port 8000 --reload
+```
 
-# Opción Docker (ya está corriendo)
-# Acceder a http://localhost:8000/docs
-Verificar que la API esté funcionando:
+Verificar que está funcionando:
 
-bash
+```bash
 curl http://localhost:8000/health
-Respuesta esperada:
+# {"status": "ok", "timestamp": "2026-10-15T10:30:00"}
+```
 
-json
-{"status": "ok", "timestamp": "2026-09-15T10:30:00"}
-Documentación interactiva (Swagger UI):
+La documentación interactiva (Swagger UI) está disponible en: **http://localhost:8000/docs**
 
-Abre tu navegador en http://localhost:8000/docs para ver todos los endpoints disponibles.
+### 2. Ejecutar el Simulador de Telemetría
 
-2. Ejecutar el Simulador de Telemetría
-El simulador genera datos sintéticos realistas para las estaciones CARONI-001 y CARONI-002.
+El simulador genera datos sintéticos realistas para las estaciones `CARONI-001` y `CARONI-002`, enviando un 80% de lecturas válidas, 10% inválidas y 10% incompletas.
 
-bash
-# Ejecutar simulador (100 iteraciones por estación)
+```bash
 python -m src.simulador
+```
 
-# O ejecutar indefinidamente (Ctrl+C para detener)
-python -c "
-from src.simulador import simular_estacion
-simular_estacion('CARONI-001', intervalo_segundos=10)
-"
 Salida esperada:
 
-text
+```
 [SIMULADOR] Iniciando estación CARONI-001
-[CARONI-001] 2026-09-15T10:30:00 → valid
-[CARONI-001] 2026-09-15T10:30:10 → valid
-[CARONI-001] 2026-09-15T10:30:20 → invalid
-[CARONI-001] 2026-09-15T10:30:30 → incomplete
-...
-3. Iniciar el Dashboard
-El dashboard proporciona una interfaz web para visualizar los datos.
+[CARONI-001] 2026-10-15T10:30:00 → valid
+[CARONI-001] 2026-10-15T10:30:10 → valid
+[CARONI-001] 2026-10-15T10:30:20 → invalid
+[CARONI-001] 2026-10-15T10:30:30 → incomplete | 1 alerta(s)
+```
 
-bash
+### 3. Iniciar el Dashboard
+
+```bash
 streamlit run src/dashboard.py
-Abre tu navegador en http://localhost:8501
+# Abre http://localhost:8501
+```
 
-Funcionalidades del dashboard:
+El dashboard incluye:
+- 📊 **Indicadores actuales** — temperatura, humedad, precipitación y voltaje de batería
+- 📈 **Series temporales** — temperatura, humedad y precipitación
+- ✅ **Distribución de calidad** — gráfico de torta `valid / invalid / incomplete`
+- 📋 **Tabla de datos recientes** — últimas 20 lecturas
+- 🚨 **Alertas activas** — lluvia intensa, calor extremo, batería baja, viento fuerte
 
-📊 Indicadores actuales (temperatura, humedad, precipitación, batería)
+### 4. Sincronización por Lotes
 
-📈 Series temporales interactivas
+La sincronización envía los datos acumulados en SQLite al endpoint batch de la API:
 
-✅ Distribución de calidad de datos (valid, invalid, incomplete)
-
-📋 Tabla de datos recientes
-
-🚨 Alertas activas
-
-4. Sincronización por Lotes
-La sincronización por lotes envía los datos acumulados localmente al sistema central.
-
-bash
-# Sincronizar todos los registros pendientes
+```bash
 python -c "
 from src.sincronizacion import sincronizar_todo
 resultado = sincronizar_todo()
 print(resultado)
 "
+```
+
 Salida esperada:
 
-json
+```json
 {
   "total_enviados": 150,
   "total_exitosos": 150,
   "estado": "completado"
 }
-Ejecutar sincronización periódica (cada 5 minutos):
+```
 
-bash
-while true; do
-    python -c "from src.sincronizacion import sincronizar_todo; sincronizar_todo()"
-    sleep 300
-done
-5. Orquestación con Airflow
-El DAG de Airflow orquesta el flujo completo cada hora.
+---
 
-Acceder a la UI de Airflow:
+## 📡 API Reference
 
-URL: http://localhost:8080
+### Endpoints disponibles
 
-Usuario: admin
+| Método | Endpoint | Descripción |
+|---|---|---|
+| `GET` | `/` | Información de la API |
+| `GET` | `/health` | Estado del sistema |
+| `POST` | `/ingesta` | Ingestar un registro individual |
+| `POST` | `/ingesta/batch` | Ingestar un lote de registros |
+| `GET` | `/telemetria/ultimas` | Últimas lecturas (paginado) |
+| `GET` | `/telemetria/estadisticas` | Estadísticas de calidad |
+| `GET` | `/telemetria/estaciones` | Lista de estaciones registradas |
+| `GET` | `/sincronizacion/pendientes` | Registros pendientes de sincronizar |
 
-Contraseña: admin
+### Ejemplo: Ingestar telemetría
 
-Activar el DAG:
+```bash
+curl -X POST http://localhost:8000/ingesta \
+  -H "Content-Type: application/json" \
+  -d '{
+    "estacion_id": "CARONI-001",
+    "timestamp": "2026-10-15T10:30:00",
+    "temperatura": 28.5,
+    "humedad": 75.0,
+    "presion": 1013.25,
+    "precipitacion": 0.0,
+    "viento": 5.2,
+    "voltaje_bateria": 3.8,
+    "rssi": -85
+  }'
+```
 
-Buscar amazonia_4_0_pipeline en la lista de DAGs
+Respuesta:
 
-Activar el toggle (ON)
+```json
+{
+  "id": 42,
+  "estado_calidad": "valid",
+  "errores": null,
+  "alertas": []
+}
+```
 
-Hacer clic en "Trigger DAG" para ejecutar manualmente
+### Rangos de validación
 
-Monitorear la ejecución:
+| Variable | Mínimo | Máximo | Unidad |
+|---|---|---|---|
+| `temperatura` | -10.0 | 45.0 | °C |
+| `humedad` | 0.0 | 100.0 | % |
+| `presion` | 800.0 | 1100.0 | hPa |
+| `precipitacion` | 0.0 | 500.0 | mm |
+| `viento` | 0.0 | 150.0 | km/h |
+| `voltaje_bateria` | 3.0 | 4.2 | V |
+| `rssi` | -120 | 0 | dBm |
 
-Graph View: Ver el flujo de tareas
+### Umbrales de alerta
 
-Tree View: Ver el historial de ejecuciones
+| Alerta | Umbral | Severidad |
+|---|---|---|
+| Lluvia intensa | precipitación > 50 mm | Alta |
+| Calor extremo | temperatura > 40 °C | Alta |
+| Batería baja | voltaje < 3.2 V | Media |
+| Viento fuerte | viento > 80 km/h | Media |
 
-Gantt: Ver los tiempos de ejecución
+---
 
-Tareas del DAG:
+## 🧪 Pruebas Unitarias
 
-verificar_gateway — Verifica disponibilidad del Edge Gateway
+El proyecto cuenta con **25 tests** distribuidos en 3 módulos:
 
-sincronizar_datos_edge — Sincroniza datos del buffer local
+```bash
+# Ejecutar todos los tests
+pytest tests/ -v
 
-evaluar_calidad — Branching según calidad (≥ 80%)
+# Con reporte de cobertura
+pytest tests/ -v --cov=src --cov-report=html
+```
 
-procesar_bronze_silver — Limpieza y validación
+| Archivo | Tests | Cobertura |
+|---|---|---|
+| `test_api.py` | 7 | Endpoints FastAPI, ingesta individual y batch |
+| `test_database.py` | 7 | Inserción, consulta y sincronización SQLite |
+| `test_validacion.py` | 11 | Motor de calidad y sistema de alertas |
 
-procesar_silver_gold — Agregaciones e indicadores
+Resultado esperado: **`25 passed`**
 
-actualizar_qdrant — Indexación en base vectorial
+---
 
-enviar_alertas — Verificación de umbrales
+## ⚙️ Variables de Entorno
 
-notificar_calidad_baja — Ruta alternativa
+Copia `.env.example` a `.env` y ajusta según tu entorno:
 
-finalizar — Cierre del DAG
+```bash
+cp .env.example .env
+```
 
+| Variable | Por defecto | Descripción |
+|---|---|---|
+| `API_HOST` | `localhost` | Host de la API |
+| `API_PORT` | `8000` | Puerto de la API |
+| `DB_PATH` | `data/telemetria.db` | Ruta de la base de datos SQLite |
+| `SYNC_ENDPOINT` | `http://localhost:8000/ingesta/batch` | Endpoint de sincronización |
+| `SYNC_BATCH_SIZE` | `100` | Registros por lote de sincronización |
+| `SYNC_MAX_RETRIES` | `3` | Reintentos ante fallo de conexión |
+| `MQTT_BROKER` | `localhost` | Host del broker Mosquitto |
+| `MQTT_PORT` | `1883` | Puerto MQTT |
+| `MQTT_TOPIC_PREFIX` | `amazonia/caroni` | Prefijo de tópicos MQTT |
 
+---
 
+## 🗄️ Estructura de la Base de Datos
 
+### Tabla `telemetria`
 
-🤝 Contribuciones
-Las contribuciones son bienvenidas. Para contribuir:
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | INTEGER PK | Identificador autoincremental |
+| `estacion_id` | TEXT | Identificador de la estación |
+| `timestamp` | TEXT | Marca de tiempo ISO 8601 |
+| `temperatura` | REAL | Temperatura en °C |
+| `humedad` | REAL | Humedad relativa en % |
+| `presion` | REAL | Presión atmosférica en hPa |
+| `precipitacion` | REAL | Precipitación en mm |
+| `viento` | REAL | Velocidad del viento en km/h |
+| `voltaje_bateria` | REAL | Voltaje de batería en V |
+| `rssi` | INTEGER | Intensidad de señal en dBm |
+| `estado_calidad` | TEXT | `valid` / `invalid` / `incomplete` |
+| `errores` | TEXT | Descripción de errores (nullable) |
+| `sincronizado` | INTEGER | `0` pendiente / `1` sincronizado |
+| `fecha_recepcion` | TEXT | Timestamp de recepción en el gateway |
 
-Fork el repositorio
+### Tabla `log_sincronizacion`
 
-Crear una rama para tu feature (git checkout -b feature/nueva-funcionalidad)
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | INTEGER PK | Identificador |
+| `timestamp` | TEXT | Momento de la sincronización |
+| `registros_enviados` | INTEGER | Total de registros enviados |
+| `registros_exitosos` | INTEGER | Registros confirmados por el servidor |
+| `estado` | TEXT | `exitoso` / `fallido` |
+| `mensaje` | TEXT | Detalle del resultado |
 
-Commit los cambios (git commit -am 'Añadir nueva funcionalidad')
+---
 
-Push a la rama (git push origin feature/nueva-funcionalidad)
+## 👥 Autores
 
-Crear un Pull Request
+| Nombre | C.I. | Email |
+|---|---|---|
+| Barrios, Massiel | 27.375.910 | massiel.barrios@uneg.edu.ve |
+| Pizzanni, Luis | 27.765.210 | luis.pizzanni@uneg.edu.ve |
+| Rodríguez, Junior | 23.730.853 | junior.rodriguez@uneg.edu.ve |
 
-Áreas de contribución:
+**Profesora:** Profa. Borjas, Livia  
+**Institución:** Universidad Nacional Experimental de Guayana (UNEG)  
+**Programa:** Maestría en Tecnologías de la Información
 
-Integración con hardware físico (ESP32)
+---
 
-Implementación de LoRaWAN
+## 📚 Referencias
 
-Modelos de machine learning para predicción
-
-Ampliación del módulo RAG
-
-Traducción a lenguas indígenas
-
-👥 Autores
-Nombre  C.I.  Email
-Barrios, Massiel  27.375.910  massiel.barrios@uneg.edu.ve
-Pizzanni, Luis  27.765.210  luis.pizzanni@uneg.edu.ve
-Rodríguez, Junior 23.730.853  junior.rodriguez@uneg.edu.ve
-Profesora: Profa. Borjas, Livia
-
-Institución: Universidad Nacional Experimental de Guayana (UNEG) — Maestría en Tecnologías de la Información
-
-
+- Buelvas et al. (2023). *Marco de calidad de datos para telemetría IoT en entornos rurales.*
+- FastAPI. (2024). *FastAPI Documentation.* https://fastapi.tiangolo.com/
+- Eclipse Foundation. (2024). *Eclipse Mosquitto MQTT Broker.* https://mosquitto.org/
+- Streamlit Inc. (2024). *Streamlit Documentation.* https://docs.streamlit.io/
+- Python Software Foundation. (2024). *Python 3.11 Documentation.* https://docs.python.org/3.11/
