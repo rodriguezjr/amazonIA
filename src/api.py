@@ -2,6 +2,7 @@
 API de ingesta para el Edge Gateway.
 Recibe telemetría, valida calidad y almacena en SQLite.
 """
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from datetime import datetime
@@ -14,23 +15,31 @@ from src.database import (
 )
 from src.validacion import validar_telemetria, verificar_alertas
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Inicializa la base de datos al arrancar la API."""
+    init_database()
+    yield
+
+
 app = FastAPI(
     title="AmazonIA 4.0 - API de Ingesta",
     description="API para la ingesta de telemetría microclimática en el borde",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 
 class TelemetriaInput(BaseModel):
-    estacion_id: str = Field(..., example="CARONI-001")
-    timestamp: str = Field(..., example="2026-09-15T10:30:00")
-    temperatura: Optional[float] = Field(None, example=28.5)
-    humedad: Optional[float] = Field(None, example=75.0)
-    presion: Optional[float] = Field(None, example=1013.25)
-    precipitacion: Optional[float] = Field(None, example=0.0)
-    viento: Optional[float] = Field(None, example=5.2)
-    voltaje_bateria: Optional[float] = Field(None, example=3.8)
-    rssi: Optional[int] = Field(None, example=-85)
+    estacion_id: str = Field(..., json_schema_extra={"example": "CARONI-001"})
+    timestamp: str = Field(..., json_schema_extra={"example": "2026-09-15T10:30:00"})
+    temperatura: Optional[float] = Field(None, json_schema_extra={"example": 28.5})
+    humedad: Optional[float] = Field(None, json_schema_extra={"example": 75.0})
+    presion: Optional[float] = Field(None, json_schema_extra={"example": 1013.25})
+    precipitacion: Optional[float] = Field(None, json_schema_extra={"example": 0.0})
+    viento: Optional[float] = Field(None, json_schema_extra={"example": 5.2})
+    voltaje_bateria: Optional[float] = Field(None, json_schema_extra={"example": 3.8})
+    rssi: Optional[int] = Field(None, json_schema_extra={"example": -85})
 
 
 class BatchInput(BaseModel):
@@ -47,10 +56,7 @@ async def root():
     }
 
 
-@app.on_event("startup")
-async def startup_event():
-    """Inicializa la base de datos al arrancar la API."""
-    init_database()
+
 
 
 @app.get("/health")

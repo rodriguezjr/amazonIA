@@ -1,6 +1,32 @@
 version: '3.8'
 
+# ============================================
+# CONFIGURACIÓN COMÚN PARA AIRFLOW
+# ============================================
+x-airflow-common:
+  &airflow-common
+  image: apache/airflow:2.10.5
+  environment:
+    AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+    AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
+    AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    AIRFLOW__WEBSERVER__SECRET_KEY: 'change_me_in_production'
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./logs:/opt/airflow/logs
+    - ./plugins:/opt/airflow/plugins
+    - ./src:/opt/airflow/src
+  depends_on:
+    - postgres
+    - redis
+
 services:
+
+  # ============================================
+  # CAPA DE INGESTA
+  # ============================================
   api:
     build: .
     container_name: amazonia-api
@@ -12,17 +38,14 @@ services:
     environment:
       - API_HOST=0.0.0.0
       - API_PORT=8000
+      - DB_PATH=/app/data/telemetria.db
     command: uvicorn src.api:app --host 0.0.0.0 --port 8000 --reload
-
-  dashboard:
-    build: .
-    container_name: amazonia-dashboard
-    ports:
-      - "8501:8501"
-    volumes:
-      - ./data:/app/data
-      - ./src:/app/src
-    command: streamlit run src/dashboard.py --server.port=8501 --server.address=0.0.0.0
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
 
   simulador:
     build: .
@@ -31,4 +54,136 @@ services:
       - api
     volumes:
       - ./src:/app/src
+    environment:
+      - API_HOST=api
+      - API_PORT=8000
     command: python -m src.simulador
+    restart: unless-stopped
+
+  # ============================================
+  # CAPA DE ALMACENAMIENTO
+  # ============================================
+  minio:
+    image: minio/minio:latest
+    container_name: amazonia-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    restart: unless-stopped
+
+  # ============================================
+  # CAPA DE PROCESAMIENTO (Airflow)
+  # ============================================
+  postgres:
+    image: postgres:15
+    container_name: amazonia-postgres
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 10s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7
+    container_name: amazonia-redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      retries: 5
+    restart: unless-stopped
+
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: amazonia-airflow-webserver
+    command: webserver
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: amazonia-airflow-scheduler
+    command: scheduler
+    restart: unless-stopped
+
+  airflow-worker:
+    <<: *airflow-common
+    container_name: amazonia-airflow-worker
+    command: celery worker
+    restart: unless-stopped
+
+  # ============================================
+  # CAPA ANALÍTICA
+  # ============================================
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: amazonia-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    restart: unless-stopped
+
+  # ============================================
+  # CAPA DE CONSUMO
+  # ============================================
+  dashboard:
+    build: .
+    container_name: amazonia-dashboard
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data
+      - ./src:/app/src
+    environment:
+      - DB_PATH=/app/data/telemetria.db
+    command: streamlit run src/dashboard.py --server.port=8501 --server.address=0.0.0.0
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  # ============================================
+  # COMUNICACIONES (FASE FUTURA)
+  # ============================================
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: amazonia-mosquitto
+    ports:
+      - "1883:1883"
+      - "9002:9001"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+    restart: unless-stopped
+
+# ============================================
+# VOLÚMENES PERSISTENTES
+# ============================================
+volumes:
+  minio_data:
+  postgres_data:
+  qdrant_storage:
