@@ -462,12 +462,11 @@ cp .env.example .env
 
 ## 👥 Autores
 
-| Nombre | C.I. | Email |
-|---|---|---|
-| Barrios, Massiel | 27.375.910 | massiel.barrios@uneg.edu.ve |
-| Pizzanni, Luis | 27.765.210 | luis.pizzanni@uneg.edu.ve |
-| Rodríguez, Junior | 23.730.853 | junior.rodriguez@uneg.edu.ve |
-
+| Nombre | C.I. |
+|---|---|
+| Barrios, Massiel | 27.375.910 | 
+| Pizzanni, Luis | 27.765.210 |
+| Rodríguez, Junior | 23.730.853 |
 **Profesora:** Profa. Borjas, Livia  
 **Institución:** Universidad Nacional Experimental de Guayana (UNEG)  
 **Programa:** Maestría en Tecnologías de la Información
