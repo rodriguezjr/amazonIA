@@ -166,7 +166,7 @@ services:
     restart: unless-stopped
 
   # ============================================
-  # COMUNICACIONES (FASE FUTURA)
+  # COMUNICACIONES Y MENSAJERÍA IOT (MQTT)
   # ============================================
   mosquitto:
     image: eclipse-mosquitto:2
@@ -178,6 +178,21 @@ services:
       - ./mosquitto/config:/mosquitto/config
       - ./mosquitto/data:/mosquitto/data
       - ./mosquitto/log:/mosquitto/log
+    restart: unless-stopped
+
+  mqtt-bridge:
+    build: .
+    container_name: amazonia-mqtt-bridge
+    depends_on:
+      - mosquitto
+    volumes:
+      - ./data:/app/data
+      - ./src:/app/src
+    environment:
+      - DB_PATH=/app/data/telemetria.db
+      - MQTT_BROKER=mosquitto
+      - MQTT_PORT=1883
+    command: python -m src.mqtt_suscriptor
     restart: unless-stopped
 
 # ============================================

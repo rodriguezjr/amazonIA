@@ -75,6 +75,9 @@ init-db:
 # ============================================
 # EJECUCIÓN
 # ============================================
+start:
+	python start.py
+
 run-api:
 	uvicorn src.api:app --host 0.0.0.0 --port 8000 --reload
 
@@ -86,6 +89,12 @@ run-simulador:
 
 sync:
 	python -c "from src.sincronizacion import sincronizar_todo; print(sincronizar_todo())"
+
+run-mqtt-pub:
+	python -m src.mqtt_publicador
+
+run-mqtt-bridge:
+	python -m src.mqtt_suscriptor
 
 # ============================================
 # DOCKER

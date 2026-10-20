@@ -147,6 +147,46 @@ def obtener_ultimas_lecturas(estacion_id: str = None, limite: int = 100) -> list
         return [dict(row) for row in cursor.fetchall()]
 
 
+def obtener_lecturas_filtradas(
+    estacion_id: str = None,
+    fecha_inicio: str = None,
+    fecha_fin: str = None,
+    limite: int = 1000,
+) -> list:
+    """
+    Obtiene lecturas filtradas por estación y rango temporal (hace 1 hora, 1 día, etc.).
+    """
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        clausulas = []
+        parametros = []
+
+        if estacion_id and estacion_id != "Todas":
+            clausulas.append("estacion_id = ?")
+            parametros.append(estacion_id)
+
+        if fecha_inicio:
+            clausulas.append("timestamp >= ?")
+            parametros.append(fecha_inicio)
+
+        if fecha_fin:
+            clausulas.append("timestamp <= ?")
+            parametros.append(fecha_fin)
+
+        where_sql = f"WHERE {' AND '.join(clausulas)}" if clausulas else ""
+
+        query = f"""
+            SELECT * FROM telemetria
+            {where_sql}
+            ORDER BY timestamp DESC
+            LIMIT ?
+        """
+        parametros.append(limite)
+        cursor.execute(query, tuple(parametros))
+        return [dict(row) for row in cursor.fetchall()]
+
+
+
 def obtener_estadisticas_calidad() -> dict:
     """Obtiene estadísticas de calidad para el dashboard."""
     with get_connection() as conn:

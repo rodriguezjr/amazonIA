@@ -142,15 +142,18 @@ amazonia4.0-mvp/
 │   ├── database.py              # Persistencia SQLite (Offline-First)
 │   ├── validacion.py            # Motor de calidad de datos
 │   ├── api.py                   # API de ingesta (FastAPI)
-│   ├── simulador.py             # Simulador de estaciones meteorológicas
+│   ├── simulador.py             # Simulador de estaciones (HTTP)
+│   ├── mqtt_publicador.py       # Publicador MQTT de sensores hacia Mosquitto
+│   ├── mqtt_suscriptor.py       # Suscriptor y Bridge MQTT hacia SQLite
 │   ├── sincronizacion.py        # Sincronización por lotes con reintentos
 │   └── dashboard.py             # Dashboard interactivo (Streamlit)
 │
-├── tests/                       # Pruebas unitarias (25 tests)
+├── tests/                       # Pruebas unitarias (32 tests)
 │   ├── __init__.py
 │   ├── test_api.py              # Pruebas de endpoints FastAPI (7 tests)
 │   ├── test_database.py         # Pruebas de persistencia SQLite (7 tests)
-│   └── test_validacion.py       # Pruebas del motor de calidad (11 tests)
+│   ├── test_validacion.py       # Pruebas del motor de calidad (11 tests)
+│   └── test_mqtt.py             # Pruebas de publicación y bridge MQTT (7 tests)
 │
 ├── dags/                        # DAGs de Apache Airflow
 │   ├── pipeline_amazonia.py     # DAG principal del pipeline
@@ -209,40 +212,42 @@ cp .env.example .env
 # 5. Inicializar la base de datos
 python -c "from src.database import init_database; init_database()"
 
-# 6. Verificar instalación (deben pasar 25 tests)
+# 6. Verificar instalación (deben pasar 32 tests)
 pytest tests/ -v
-```
-
-### Opción 2: Docker Compose
-
-```bash
-# Clonar y levantar todos los servicios
-git clone https://github.com/rodriguezjr/amazonIA.git
-cd amazonia4.0-mvp
-docker-compose up --build -d
-
-# Verificar estado de los servicios
-docker-compose ps
-```
-
-Servicios disponibles tras el despliegue:
-
-| Servicio | URL | Descripción |
-|---|---|---|
-| API (Swagger) | http://localhost:8000/docs | Documentación interactiva |
-| API (Health) | http://localhost:8000/health | Estado del sistema |
-| Dashboard | http://localhost:8501 | Visualización de telemetría |
-| Mosquitto MQTT | localhost:1883 | Broker MQTT |
-| MinIO | http://localhost:9001 | Almacenamiento de objetos |
-
-```bash
-# Detener todos los servicios
-docker-compose down
 ```
 
 ---
 
-## 🎯 Uso del Sistema
+## 🎯 Despliegue Rápido Local (Un Solo Comando)
+
+Para evitar abrir múltiples terminales, el proyecto cuenta con un **orquestador unificado**:
+
+```bash
+# Iniciar todo (API + Dashboard + Simulador) en una sola ventana:
+python start.py
+```
+> En Windows también puedes simplemente hacer **doble clic en `start.bat`**.
+
+Esto automáticamente:
+1. Verifica e inicializa la base de datos SQLite si es necesario.
+2. Inicia la **API FastAPI** en segundo plano (`:8000`).
+3. Inicia el **Dashboard Streamlit** (`:8501`).
+4. Inicia el **Simulador de telemetría**.
+5. Abre tu navegador automáticamente en el Dashboard.
+6. Al presionar **Ctrl+C**, apaga y limpia todos los procesos de forma segura.
+
+**Opciones de ejecución rápida:**
+```bash
+python start.py --modo http           # Modo REST API por defecto
+python start.py --modo mqtt           # Inicia Bridge MQTT y Publicador Mosquitto
+python start.py --sin-simulador       # Inicia solo API y Dashboard (sin datos simulados)
+```
+
+---
+
+## 🛠️ Uso Manual del Sistema (Módulo por Módulo)
+
+Si prefieres ejecutar cada componente por separado en terminales independientes:
 
 ### 1. Iniciar la API de Ingesta
 
@@ -312,6 +317,41 @@ Salida esperada:
   "estado": "completado"
 }
 ```
+
+### 5. Ingesta y Publicación mediante MQTT (Mosquitto)
+
+El proyecto incluye soporte nativo para mensajería IoT con Eclipse Mosquitto:
+
+```
+Sensor (mqtt_publicador) ──[MQTT pub]──> Mosquitto (:1883) ──[MQTT sub]──> Bridge (mqtt_suscriptor) ──> SQLite
+                                                                                  │
+                                                                           [alerta pub]
+                                                                                  ↓
+                                                                     amazonia/caroni/{id}/alertas
+```
+
+**Paso 1: Levantar el broker Mosquitto (Docker)**
+```bash
+docker-compose up -d mosquitto
+```
+
+**Paso 2: Iniciar el Bridge MQTT a SQLite (en una terminal)**
+```bash
+python -m src.mqtt_suscriptor
+```
+
+**Paso 3: Iniciar el Publicador de Sensores MQTT (en otra terminal)**
+```bash
+# Publicar estación CARONI-001 cada 5 segundos
+python -m src.mqtt_publicador --estacion CARONI-001 --intervalo 5
+```
+
+**Tópicos MQTT utilizados:**
+| Tópico | Dirección | Descripción |
+|---|---|---|
+| `amazonia/caroni/{id}/telemetria` | Sensor → Broker | Lecturas crudas del sensor en JSON |
+| `amazonia/caroni/{id}/alertas` | Bridge → Broker | Alertas críticas republicadas en tiempo real |
+| `amazonia/caroni/{id}/status` | Sensor → Broker | Estado operativo de la estación |
 
 ---
 
@@ -384,7 +424,7 @@ Respuesta:
 
 ## 🧪 Pruebas Unitarias
 
-El proyecto cuenta con **25 tests** distribuidos en 3 módulos:
+El proyecto cuenta con **32 tests** distribuidos en 4 módulos:
 
 ```bash
 # Ejecutar todos los tests
@@ -399,8 +439,9 @@ pytest tests/ -v --cov=src --cov-report=html
 | `test_api.py` | 7 | Endpoints FastAPI, ingesta individual y batch |
 | `test_database.py` | 7 | Inserción, consulta y sincronización SQLite |
 | `test_validacion.py` | 11 | Motor de calidad y sistema de alertas |
+| `test_mqtt.py` | 7 | Publicación, bridge y persistencia MQTT |
 
-Resultado esperado: **`25 passed`**
+Resultado esperado: **`32 passed`**
 
 ---
 

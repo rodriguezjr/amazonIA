@@ -101,3 +101,24 @@ class TestConsultas:
         insertar_telemetria(registro)
         estaciones = obtener_estaciones()
         assert "CARONI-TEST-UNICA" in estaciones
+
+    def test_obtener_lecturas_filtradas(self):
+        """Debe retornar lecturas filtradas por fecha_inicio y estación."""
+        from src.database import obtener_lecturas_filtradas
+
+        reg1 = _registro_ejemplo("CARONI-TEST-FILTRO")
+        reg1["timestamp"] = "2026-10-01T10:00:00"
+        insertar_telemetria(reg1)
+
+        reg2 = _registro_ejemplo("CARONI-TEST-FILTRO")
+        reg2["timestamp"] = "2026-10-15T10:00:00"
+        insertar_telemetria(reg2)
+
+        # Filtrar solo después del 2026-10-10
+        filtrados = obtener_lecturas_filtradas(
+            estacion_id="CARONI-TEST-FILTRO",
+            fecha_inicio="2026-10-10T00:00:00",
+        )
+        assert len(filtrados) == 1
+        assert filtrados[0]["timestamp"] == "2026-10-15T10:00:00"
+

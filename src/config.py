@@ -20,6 +20,17 @@ SYNC_ENDPOINT = os.getenv("SYNC_ENDPOINT", "http://localhost:8000/ingesta/batch"
 SYNC_BATCH_SIZE = int(os.getenv("SYNC_BATCH_SIZE", 100))
 SYNC_MAX_RETRIES = int(os.getenv("SYNC_MAX_RETRIES", 3))
 
+# Configuración MQTT (Mosquitto)
+MQTT_BROKER = os.getenv("MQTT_BROKER", "localhost")
+MQTT_PORT = int(os.getenv("MQTT_PORT", 1883))
+MQTT_USERNAME = os.getenv("MQTT_USERNAME", "")
+MQTT_PASSWORD = os.getenv("MQTT_PASSWORD", "")
+MQTT_TOPIC_PREFIX = os.getenv("MQTT_TOPIC_PREFIX", "amazonia/caroni")
+MQTT_CLIENT_ID_PUB = os.getenv("MQTT_CLIENT_ID_PUB", "amazonia-publicador")
+MQTT_CLIENT_ID_SUB = os.getenv("MQTT_CLIENT_ID_SUB", "amazonia-bridge")
+MQTT_KEEPALIVE = int(os.getenv("MQTT_KEEPALIVE", 60))
+MQTT_QOS = int(os.getenv("MQTT_QOS", 1))
+
 # Rangos de validación para la cuenca del río Caroní
 RANGOS_VALIDACION = {
     "temperatura": {"min": -10.0, "max": 45.0, "unidad": "°C"},
