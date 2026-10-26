@@ -1,46 +1,55 @@
 """
-Script de Spark para el procesamiento Bronze → Silver.
-En producción, este script se ejecutaría con spark-submit.
+Procesamiento Bronze → Silver con DuckDB y Apache Parquet.
+Limpia, deduplica y valida termodinámicamente los datos de telemetría.
+Arquitectura Medallion para AmazonIA 4.0.
 """
 import sys
-from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, when, current_timestamp
-from delta import configure_spark_with_delta_pip
+import os
+import logging
+from pathlib import Path
 
-def main():
-    # Configurar Spark con Delta Lake
-    builder = SparkSession.builder \
-        .appName("AmazonIA4.0-BronzeToSilver") \
-        .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension") \
-        .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog") \
-        .config("spark.hadoop.fs.s3a.endpoint", "http://minio:9000") \
-        .config("spark.hadoop.fs.s3a.access.key", "minioadmin") \
-        .config("spark.hadoop.fs.s3a.secret.key", "minioadmin") \
-        .config("spark.hadoop.fs.s3a.path.style.access", "true")
-    
-    spark = configure_spark_with_delta_pip(builder).getOrCreate()
-    
-    # Leer datos de Bronze
-    df_bronze = spark.read.format("delta").load("s3a://lakehouse/delta/bronze/telemetria")
-    
-    # Limpieza y validación
-    df_silver = df_bronze \
-        .filter(col("estado_calidad") == "valid") \
-        .withColumn("temperatura_celsius", 
-                    when(col("temperatura") > 100, None).otherwise(col("temperatura"))) \
-        .withColumn("timestamp_procesado", current_timestamp()) \
-        .dropDuplicates(["estacion_id", "timestamp"])
-    
-    # Escribir en Silver
-    df_silver.write \
-        .format("delta") \
-        .mode("overwrite") \
-        .option("overwriteSchema", "true") \
-        .save("s3a://lakehouse/delta/silver/telemetria_limpia")
-    
-    print(f"Registros procesados: {df_silver.count()}")
-    spark.stop()
+# Agregar la raíz del proyecto al PYTHONPATH
+_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(_ROOT))
+
+from src.lakehouse.manager import AmazonIALakehouse
+
+logger = logging.getLogger("amazonia.pipeline.bronze_to_silver")
+
+_DB_PATH = os.getenv("DB_PATH", str(_ROOT / "data" / "telemetria.db"))
+_LAKEHOUSE_DIR = Path(os.getenv("LAKEHOUSE_DIR", str(_ROOT / "data" / "lakehouse")))
+
+
+def main() -> dict:
+    """
+    Ejecuta la ingesta a Bronze y la depuración a Silver usando DuckDB.
+    Retorna un diccionario con el resumen de la operación.
+    """
+    logger.info("═══ [DuckDB] Iniciando procesamiento Bronze → Silver ═══")
+
+    lakehouse = AmazonIALakehouse(
+        db_path=Path(_DB_PATH),
+        lakehouse_dir=_LAKEHOUSE_DIR,
+    )
+
+    # 1. Asegurar ingesta a Bronze
+    res_bronze = lakehouse.procesar_bronze()
+
+    # 2. Procesar Bronze → Silver con DuckDB SQL
+    res_silver = lakehouse.procesar_silver()
+
+    resultado = {
+        "total_bronze": res_bronze.get("total_bronze", 0),
+        "total_silver": res_silver.get("total_silver", 0),
+        "estaciones": res_silver.get("estaciones", 0),
+        "rango_fechas": res_silver.get("rango_fechas", "N/A"),
+        "archivo_destino": res_silver.get("archivo", ""),
+    }
+    logger.info("═══ [DuckDB] Bronze → Silver completado: %s ═══", resultado)
+    return resultado
 
 
 if __name__ == "__main__":
-    main()
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
+    res = main()
+    print(f"Resultado: {res}")

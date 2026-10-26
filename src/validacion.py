@@ -88,35 +88,40 @@ def validar_telemetria(datos: dict) -> dict:
 def verificar_alertas(registro: dict) -> list:
     """
     Verifica si un registro supera los umbrales de alerta.
+    Maneja con seguridad campos ausentes o con valor None en la DB.
     Retorna una lista de alertas activadas.
     """
     alertas = []
     
-    if registro.get("precipitacion", 0) > UMBRALES_ALERTA["precipitacion_intensa"]:
+    precip = registro.get("precipitacion")
+    if precip is not None and precip > UMBRALES_ALERTA["precipitacion_intensa"]:
         alertas.append({
             "tipo": "lluvia_intensa",
-            "mensaje": f"Precipitación intensa: {registro['precipitacion']} mm",
+            "mensaje": f"Precipitación intensa: {precip} mm",
             "severidad": "alta",
         })
     
-    if registro.get("temperatura", 0) > UMBRALES_ALERTA["calor_extremo"]:
+    temp = registro.get("temperatura")
+    if temp is not None and temp > UMBRALES_ALERTA["calor_extremo"]:
         alertas.append({
             "tipo": "calor_extremo",
-            "mensaje": f"Calor extremo: {registro['temperatura']} °C",
+            "mensaje": f"Calor extremo: {temp} °C",
             "severidad": "alta",
         })
     
-    if registro.get("voltaje_bateria", 5) < UMBRALES_ALERTA["bateria_baja"]:
+    bat = registro.get("voltaje_bateria")
+    if bat is not None and bat < UMBRALES_ALERTA["bateria_baja"]:
         alertas.append({
             "tipo": "bateria_baja",
-            "mensaje": f"Batería baja: {registro['voltaje_bateria']} V",
+            "mensaje": f"Batería baja: {bat} V",
             "severidad": "media",
         })
     
-    if registro.get("viento", 0) > UMBRALES_ALERTA["viento_fuerte"]:
+    viento = registro.get("viento")
+    if viento is not None and viento > UMBRALES_ALERTA["viento_fuerte"]:
         alertas.append({
             "tipo": "viento_fuerte",
-            "mensaje": f"Viento fuerte: {registro['viento']} km/h",
+            "mensaje": f"Viento fuerte: {viento} km/h",
             "severidad": "media",
         })
     

@@ -20,8 +20,11 @@ from src.database import (
 
 
 @pytest.fixture(autouse=True)
-def setup_database():
-    """Inicializa la base de datos antes de cada prueba."""
+def setup_database(tmp_path, monkeypatch):
+    """Inicializa una base de datos temporal aislada antes de cada prueba."""
+    db_file = tmp_path / "test_telemetria.db"
+    monkeypatch.setattr("src.config.DB_PATH", db_file)
+    monkeypatch.setattr("src.database.DB_PATH", db_file)
     init_database()
     yield
 
@@ -121,4 +124,3 @@ class TestConsultas:
         )
         assert len(filtrados) == 1
         assert filtrados[0]["timestamp"] == "2026-10-15T10:00:00"
-

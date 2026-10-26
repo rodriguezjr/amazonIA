@@ -1,58 +1,56 @@
 """
-Indexador de documentos y datos para la memoria semántica (RAG).
-Actualiza la base vectorial Qdrant con nuevos embeddings.
+Indexador RAG para AmazonIA 4.0.
+Usa AmazonIAVectorStore (Qdrant offline) ya implementado en src/rag/.
+Sin dependencias de LangChain ni OpenAI — embeddings deterministas locales.
+
+Lógica:
+  1. Importa AmazonIAVectorStore desde src/rag/vector_store.
+  2. Ejecuta indexar_documentos(forzar=True) para re-indexar toda la knowledge_base.
+  3. Retorna el conteo de documentos indexados.
 """
+import sys
+import os
 import logging
-from qdrant_client import QdrantClient
-from qdrant_client.http.models import Distance, VectorParams
-from langchain_qdrant import QdrantVectorStore
-from langchain_openai import OpenAIEmbeddings
-from langchain_community.document_loaders import PyPDFLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from pathlib import Path
 
-logger = logging.getLogger(__name__)
+# Agregar la raíz del proyecto al PYTHONPATH para importar src/
+_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(_ROOT))
+
+logger = logging.getLogger("amazonia.pipeline.rag_indexer")
 
 
-def actualizar_vector_store():
+def main() -> dict:
     """
-    Actualiza la base vectorial con nuevos documentos técnicos.
+    Actualiza la base vectorial Qdrant con los documentos de knowledge_base/.
+    Retorna un diccionario con el resumen de la indexación.
     """
-    client = QdrantClient(url="http://qdrant:6333")
-    
-    # Crear colección si no existe
-    collections = client.get_collections().collections
-    if not any(c.name == "documentos_amazonia" for c in collections):
-        client.create_collection(
-            collection_name="documentos_amazonia",
-            vectors_config=VectorParams(size=3072, distance=Distance.COSINE),
-        )
-        logger.info("Colección 'documentos_amazonia' creada")
-    
-    # Cargar e indexar documentos
-    embedding_model = OpenAIEmbeddings(model="text-embedding-3-large")
-    
-    documentos = [
-        "manuales/agricultura_caroni.pdf",
-        "manuales/gestion_riesgos.pdf",
-        "guias/calendario_siembra.pdf",
-    ]
-    
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-    
-    for doc_path in documentos:
-        try:
-            loader = PyPDFLoader(doc_path)
-            docs = loader.load()
-            chunks = text_splitter.split_documents(docs)
-            
-            QdrantVectorStore.from_documents(
-                documents=chunks,
-                embedding=embedding_model,
-                url="http://qdrant:6333",
-                collection_name="documentos_amazonia",
-            )
-            logger.info(f"Indexado: {doc_path} ({len(chunks)} chunks)")
-        except Exception as e:
-            logger.error(f"Error indexando {doc_path}: {e}")
-    
-    return {"documentos_indexados": len(documentos)}
+    logger.info("═══ Iniciando indexación RAG (Qdrant) ═══")
+
+    from src.rag.vector_store import AmazonIAVectorStore
+
+    try:
+        vs = AmazonIAVectorStore()
+        total = vs.indexar_documentos(forzar=True)
+
+        resultado = {
+            "documentos_indexados": total,
+            "coleccion": vs.coleccion,
+            "estado": "exitoso",
+        }
+        logger.info("═══ Indexación RAG completada: %s ═══", resultado)
+        return resultado
+
+    except Exception as e:
+        logger.error("Error durante la indexación RAG: %s", e)
+        return {
+            "documentos_indexados": 0,
+            "estado": "error",
+            "detalle": str(e),
+        }
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
+    resultado = main()
+    print(f"Resultado: {resultado}")

@@ -30,6 +30,7 @@ from src.database import (
     obtener_estaciones,
 )
 from src.config import RANGOS_VALIDACION, UMBRALES_ALERTA
+from src.rag.engine import responder_consulta_rag
 
 # Encabezado principal
 st.title("🌿 AmazonIA 4.0 — Monitoreo Microclimático en el Borde")
@@ -171,13 +172,14 @@ with col5:
 
 
 # ==============================================================================
-# SECCIÓN 2: PESTAÑAS DEDICADAS POR SENSOR
+# SECCIÓN 2: PESTAÑAS DEDICADAS POR SENSOR Y ASISTENTE IA
 # ==============================================================================
 st.markdown("---")
-st.subheader("📈 Análisis Detallado por Variable Microclimática")
+st.subheader("📈 Monitoreo de Variables y Asistencia Inteligente")
 st.markdown(f"*Mostrando {len(df_sorted)} registros ({ventana_sel})*")
 
 (
+    tab_rag,
     tab_temp,
     tab_hum,
     tab_prec,
@@ -187,6 +189,7 @@ st.markdown(f"*Mostrando {len(df_sorted)} registros ({ventana_sel})*")
     tab_rssi,
     tab_comparativa,
 ) = st.tabs([
+    "🤖 Asistente Comunitario IA (RAG)",
     "🌡️ Temperatura",
     "💧 Humedad",
     "🌧️ Precipitación",
@@ -196,6 +199,89 @@ st.markdown(f"*Mostrando {len(df_sorted)} registros ({ventana_sel})*")
     "📶 Señal (RSSI)",
     "🌐 Comparativa Multivariable",
 ])
+
+# ------------------------------------------------------------------------------
+# TAB 0: ASISTENTE COMUNITARIO IA (RAG)
+# ------------------------------------------------------------------------------
+with tab_rag:
+    st.markdown("### 🤖 Asistente Agroclimático y de Riesgo — RAG AmazonIA 4.0")
+    st.caption(
+        "Combina la telemetría viva de SQLite con la memoria semántica de la cuenca del Río Caroní indexada en Qdrant."
+    )
+
+    # Inicializar historial de chat en session_state
+    if "rag_messages" not in st.session_state:
+        st.session_state.rag_messages = [
+            {
+                "role": "assistant",
+                "content": (
+                    "¡Hola! Soy el asistente inteligente de **AmazonIA 4.0**. "
+                    "Estoy conectado a los sensores de la cuenca del río Caroní y a los manuales agroclimáticos y protocolos comunitarios. "
+                    "¿En qué puedo orientarte hoy sobre siembras, alertas hidrometeorológicas o estado de las estaciones?"
+                ),
+            }
+        ]
+
+    # Botones de preguntas predefinidas rápidas
+    st.markdown("**Consultas rápidas sugeridas:**")
+    cp1, cp2, cp3, cp4 = st.columns(4)
+    pregunta_rapida = None
+
+    if cp1.button("🌱 ¿Es seguro sembrar yuca o maíz hoy?", use_container_width=True):
+        pregunta_rapida = "¿Es seguro sembrar yuca o maíz hoy dadas las condiciones actuales?"
+    if cp2.button("🚨 ¿Cuál es el nivel de riesgo de inundación?", use_container_width=True):
+        pregunta_rapida = "¿Cuál es el nivel de riesgo de crecida o inundación según las lluvias de las últimas 24 horas?"
+    if cp3.button("🔋 ¿Cuál es el estado de las baterías?", use_container_width=True):
+        pregunta_rapida = "¿Cuál es el estado de salud de la batería y paneles de las estaciones meteorológicas?"
+    if cp4.button("💨 ¿El viento amenaza los platanales?", use_container_width=True):
+        pregunta_rapida = "¿Las velocidades de viento registradas representan peligro para el plátano o maíz?"
+
+    # Renderizar historial de mensajes
+    for msg in st.session_state.rag_messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+            if "contexto" in msg:
+                with st.expander("🔍 Ver fuentes Qdrant y telemetría analizada"):
+                    st.json(msg["contexto"]["telemetria"])
+                    for d in msg["contexto"]["documentos"]:
+                        st.markdown(f"**Documento:** `{d.get('documento')}` (Similitud: `{d.get('score')}`)")
+                        st.markdown(f"> {d.get('texto')[:280]}...")
+
+    # Captura de input del usuario (por botón rápido o campo de texto)
+    prompt_usuario = st.chat_input("Escribe tu pregunta sobre cultivos, clima, alertas o telemetría...")
+    prompt_activo = pregunta_rapida or prompt_usuario
+
+    if prompt_activo:
+        st.session_state.rag_messages.append({"role": "user", "content": prompt_activo})
+        with st.chat_message("user"):
+            st.markdown(prompt_activo)
+
+        with st.chat_message("assistant"):
+            with st.spinner("Analizando telemetría de sensores y consultando base vectorial Qdrant..."):
+                resultado_rag = responder_consulta_rag(
+                    pregunta=prompt_activo,
+                    estacion_id=estacion_sel if estacion_sel != "Todas" else None,
+                )
+                respuesta_texto = resultado_rag["respuesta"]
+                st.markdown(respuesta_texto)
+                st.caption(f"⚙️ Procesado mediante: `{resultado_rag['motor']}`")
+
+                with st.expander("🔍 Ver fuentes Qdrant y telemetría analizada"):
+                    st.write("**Telemetría viva utilizada:**")
+                    st.json(resultado_rag["telemetria"])
+                    st.write("**Fragmentos recuperados de Qdrant:**")
+                    for d in resultado_rag["documentos"]:
+                        st.markdown(f"**[{d.get('titulo')}]** - `{d.get('documento')}` (Score: `{d.get('score')}`)")
+                        st.markdown(f"> {d.get('texto')[:300]}...")
+
+        st.session_state.rag_messages.append({
+            "role": "assistant",
+            "content": respuesta_texto,
+            "contexto": {
+                "telemetria": resultado_rag["telemetria"],
+                "documentos": resultado_rag["documentos"],
+            },
+        })
 
 # ------------------------------------------------------------------------------
 # TAB 1: TEMPERATURA

@@ -1,523 +1,473 @@
 # 🌿 AmazonIA 4.0 — Arquitectura de Datos Inteligente en el Borde
-
-**Diseño de Arquitectura de Datos Inteligente en el Borde para el Procesamiento de Telemetría Microclimática en Estaciones Meteorológicas Comunitarias en la Cuenca del Río Caroní**
+## Telemetría Microclimática, Lakehouse Medallion y Memoria Semántica en la Cuenca del Río Caroní
 
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-green.svg)](https://fastapi.tiangolo.com/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.40-red.svg)](https://streamlit.io/)
-[![SQLite](https://img.shields.io/badge/SQLite-3.x-lightblue.svg)](https://www.sqlite.org/)
-[![Pytest](https://img.shields.io/badge/Pytest-8.3-orange.svg)](https://pytest.org/)
+[![DuckDB](https://img.shields.io/badge/DuckDB-2.0.0-yellow.svg)](https://duckdb.org/)
+[![Parquet](https://img.shields.io/badge/Apache_Parquet-ZSTD-blueviolet.svg)](https://parquet.apache.org/)
+[![Qdrant](https://img.shields.io/badge/Qdrant-Vector_Store-critical.svg)](https://qdrant.tech/)
+[![Airflow](https://img.shields.io/badge/Apache_Airflow-2.10-017CEE.svg)](https://airflow.apache.org/)
+[![SQLite](https://img.shields.io/badge/SQLite-Offline--First-lightblue.svg)](https://www.sqlite.org/)
+[![Pytest](https://img.shields.io/badge/Pytest-55+_Passed-brightgreen.svg)](https://pytest.org/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ---
 
 ## 📋 Tabla de Contenidos
 
-- [Descripción General](#-descripción-general)
-- [Problemática](#-problemática)
-- [Arquitectura del MVP](#️-arquitectura-del-mvp)
-- [Tecnologías Utilizadas](#️-tecnologías-utilizadas)
-- [Estructura del Repositorio](#-estructura-del-repositorio)
-- [Requisitos Previos](#-requisitos-previos)
-- [Instalación](#-instalación)
-- [Uso del Sistema](#-uso-del-sistema)
-- [API Reference](#-api-reference)
-- [Pruebas Unitarias](#-pruebas-unitarias)
-- [Variables de Entorno](#-variables-de-entorno)
-- [Estructura de la Base de Datos](#-estructura-de-la-base-de-datos)
-- [Autores](#-autores)
-- [Referencias](#-referencias)
+- [1. Descripción General](#1-descripción-general)
+- [2. Problemática en la Cuenca del Río Caroní](#2-problemática-en-la-cuenca-del-río-caroní)
+- [3. Arquitectura del Sistema](#3-arquitectura-del-sistema)
+- [4. Tecnologías y Componentes de Datos Inteligentes](#4-tecnologías-y-componentes-de-datos-inteligentes)
+  - [4.1. Memoria Semántica y Asistente Agroclimático RAG (Qdrant)](#41-memoria-semántica-y-asistente-agroclimático-rag-qdrant)
+  - [4.2. Pipeline Medallion Lakehouse (DuckDB + Parquet ZSTD)](#42-pipeline-medallion-lakehouse-duckdb--parquet-zstd)
+  - [4.3. Orquestador de Pipelines (Apache Airflow y Runner Local)](#43-orquestador-de-pipelines-apache-airflow-y-runner-local)
+- [5. Estructura del Repositorio](#5-estructura-del-repositorio)
+- [6. Guía de Ejecución: Modo Local (Offline-First sin Docker)](#6-guía-de-ejecución-modo-local-offline-first-sin-docker)
+  - [6.1. Instalación de Dependencias](#61-instalación-de-dependencias)
+  - [6.2. Despliegue Unificado con un Solo Comando (`start.py`)](#62-despliegue-unificado-con-un-solo-comando-startpy)
+  - [6.3. Ejecución del Pipeline Analítico Completo Medallion & RAG](#63-ejecución-del-pipeline-analítico-completo-medallion--rag)
+  - [6.4. Ejecución del Conjunto de Pruebas Automatizadas (55 Tests)](#64-ejecución-del-conjunto-de-pruebas-automatizadas-55-tests)
+- [7. Guía de Ejecución: Modo Contenedores (Docker & Airflow Stack)](#7-guía-de-ejecución-modo-contenedores-docker--airflow-stack)
+  - [7.1. Requisitos de Docker](#71-requisitos-de-docker)
+  - [7.2. Inicialización de Airflow (`airflow_init.bat`)](#72-inicialización-de-airflow-airflow_initbat)
+  - [7.3. Despliegue del Stack Completo](#73-despliegue-del-stack-completo)
+  - [7.4. Accesos a Interfaces y Credenciales](#74-accesos-a-interfaces-y-credenciales)
+  - [7.5. Detención y Mantenimiento de Contenedores](#75-detención-y-mantenimiento-de-contenedores)
+- [8. Marco de Calidad de Datos (Buelvas et al., 2023)](#8-marco-de-calidad-de-datos-buelvas-et-al-2023)
+- [9. Referencia de Endpoints API REST](#9-referencia-de-endpoints-api-rest)
+- [10. Documentos Técnicos y Académicos Complementarios](#10-documentos-técnicos-y-académicos-complementarios)
+- [11. Autores y Créditos Académicos](#11-autores-y-créditos-académicos)
 
 ---
 
-## 🌎 Descripción General
+## 1. Descripción General
 
-**AmazonIA 4.0** es una arquitectura de datos inteligente en el borde *(Edge Computing)* diseñada para el procesamiento de telemetría microclimática en estaciones meteorológicas comunitarias de la cuenca del río Caroní, estado Bolívar, Venezuela.
+**AmazonIA 4.0** es una plataforma integral de ingeniería de datos inteligente diseñada para operar en el borde (*Edge Computing*) en la cuenca del Río Caroní (Estado Bolívar, Venezuela). Su propósito es procesar, depurar y correlacionar variables microclimáticas provenientes de estaciones meteorológicas comunitarias autónomas, integrando:
 
-El sistema aborda la **asimetría de información** en la región mediante:
-
-- **Edge Computing** — procesamiento local de datos en el borde de la red
-- **Offline-First** — buffer SQLite que garantiza continuidad operativa ante cortes de red
-- **Validación de calidad** en tiempo real, clasificando datos como `valid`, `invalid` o `incomplete`
-- **Sincronización por lotes** — reenvío automático con reintentos y backoff exponencial
-- **Visualización interactiva** — dashboard en tiempo real con alertas configurables
-
-Este repositorio contiene el **Producto Mínimo Viable (MVP)** que implementa los componentes esenciales de la arquitectura.
+- **Enfoque Offline-First Total:** El sistema garantiza continuidad operativa y diagnóstica en comunidades agrícolas e indígenas sin conexión a Internet o en presencia de fallas eléctricas prolongadas.
+- **Buffer Inmutable Transaccional (SQLite):** Registra cada trama cruda recibida preservando su integridad física y auditabilidad.
+- **Lakehouse Medallion Embebido (DuckDB + Apache Parquet ZSTD):** Provee capacidades OLAP analíticas de alto rendimiento sin requerir infraestructuras pesadas de Big Data basadas en Java/Spark.
+- **Memoria Semántica RAG (Qdrant + Embeddings Locales de 128 Dimensiones):** Correlaciona la telemetría viva de los sensores con manuales agronómicos locales para emitir recomendaciones agrícolas y alertas de crecidas del río.
 
 ---
 
-## 🔍 Problemática
+## 2. Problemática en la Cuenca del Río Caroní
 
-La cuenca del río Caroní enfrenta:
-
-- **Escasez de estaciones de monitoreo** microclimático en zonas rurales
-- **Inestabilidad eléctrica** que provoca pérdida de telemetría
-- **Conectividad intermitente** que impide transmisión continua a la nube
-- **Dependencia de arquitecturas centralizadas** sin resiliencia local
-- **Datos sin interpretación contextual** para las comunidades locales
-
-Las consecuencias incluyen series temporales incompletas, imposibilidad de generar alertas tempranas y decisiones agrícolas basadas en percepciones subjetivas.
+La cuenca del río Caroní y el sur de Venezuela presentan condiciones ambientales y de infraestructura sumamente adversas:
+- **Ausencia de conectividad:** Cobertura celular nula en zonas de selva y sabana, con enlaces satelitales intermitentes o de muy bajo ancho de banda.
+- **Inestabilidad del suministro eléctrico:** Racionamientos prolongados y dependencia exclusiva de energía solar fotovoltaica con baterías de litio.
+- **Pérdida histórica de telemetría:** Los sistemas centralizados tradicionales pierden las lecturas cuando se cae el enlace de red hacia la nube.
+- **Falta de interpretación contextual comunitaria:** Los datos crudos no ofrecen utilidad directa a los productores locales si no se traducen en recomendaciones prácticas de siembra (yuca, maíz, plátano) o alertas tempranas de crecidas fluviales.
 
 ---
 
-## 🏗️ Arquitectura del MVP
+## 3. Arquitectura del Sistema
 
-El MVP implementa las siguientes capas:
+```mermaid
+flowchart TD
+    subgraph CAPA1["1. Captura en Campo (Edge IoT)"]
+        SENS["📡 Nodos Sensores ESP32 / LoRaWAN\n(Temp, Humedad, Presión, Lluvia, Viento, Batería, RSSI)"]
+    end
 
+    subgraph CAPA2["2. Ingesta y Edge Gateway (Offline-First)"]
+        MQTT["Broker MQTT Mosquitto (:1883)"]
+        API["FastAPI Ingest Service (:8000)"]
+        VAL["Motor de Validación (Buelvas et al.)"]
+        SQLITE[("SQLite Buffer Local\ndata/telemetria.db")]
+        
+        SENS -->|MQTT / HTTP| MQTT & API
+        MQTT & API --> VAL -->|Clasificación: valid / invalid / incomplete| SQLITE
+    end
+
+    subgraph CAPA3["3. Procesamiento y Lakehouse Medallion (DuckDB)"]
+        BRONZE["🥉 Bronze: telemetria_raw.parquet\n(ZSTD, 100% registros crudos)"]
+        SILVER["🥈 Silver: telemetria_limpia.parquet\n(Deduplicación ROW_NUMBER + Filtro Calidad)"]
+        GOLD1["🥇 Gold: indicadores_horarios.parquet\n(Agregaciones climáticas por hora)"]
+        GOLD2["🥇 Gold: indicadores_diarios.parquet\n(Resumen bioclimático 24h + Amplitud térmica)"]
+        GOLD3["🥇 Gold: kpis_calidad_estaciones.parquet\n(% Calidad, Salud de Batería y RSSI)"]
+        
+        SQLITE -->|COPY DuckDB ZSTD| BRONZE
+        BRONZE -->|DuckDB SQL Limpieza| SILVER
+        SILVER --> GOLD1 & GOLD2
+        BRONZE & SILVER --> GOLD3
+    end
+
+    subgraph CAPA4["4. Memoria Semántica RAG (Qdrant)"]
+        KB["📚 Knowledge Base (Manuales Markdown)"]
+        QDRANT[("Qdrant Vector Store\n(documentos_amazonia - 128d)")]
+        RAG["Motor RAG AmazonIA 4.0\n(Fusión Telemetría + Guías Agroclimáticas)"]
+        
+        KB -->|Embeddings Locales| QDRANT
+        QDRANT --> RAG
+        SQLITE -->|Lecturas Vivas 24h| RAG
+    end
+
+    subgraph CAPA5["5. Visualización y Consumo Comunitario"]
+        DASH["🖥️ Streamlit Dashboard (:8501)\n(9 Pestañas + Filtro de 1h a 1 año)"]
+        CHAT["🤖 Asistente Comunitario IA"]
+        ALERT["🚨 Alertas de Crecidas y Calor Extremo"]
+        
+        GOLD1 & GOLD2 & GOLD3 --> DASH
+        RAG --> CHAT
+        VAL --> ALERT
+    end
+
+    CAPA2 --> CAPA3
+    CAPA2 --> CAPA4
+    CAPA3 --> CAPA5
+    CAPA4 --> CAPA5
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  FUENTES DE DATOS                                           │
-│  Sensores IoT (simulados: CARONI-001, CARONI-002)           │
-└─────────────────────────┬───────────────────────────────────┘
-                          │ HTTP POST / MQTT (paho-mqtt)
-                          ▼
-┌─────────────────────────────────────────────────────────────┐
-│  CAPA DE INGESTA — Edge Gateway                             │
-│  FastAPI  ·  Motor de Validación  ·  Mosquitto MQTT         │
-│  ─────────────── Offline-First ─────────────────            │
-└─────────────────────────┬───────────────────────────────────┘
-                          │ SQLite (buffer local)
-                          ▼
-┌─────────────────────────────────────────────────────────────┐
-│  PERSISTENCIA LOCAL                                         │
-│  SQLite  ·  Sincronización por Lotes (HTTP batch)           │
-└─────────────────────────┬───────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────┐
-│  CAPA DE CONSUMO                                            │
-│  Streamlit Dashboard  ·  Alertas en tiempo real             │
-└─────────────────────────────────────────────────────────────┘
+
+---
+
+## 4. Tecnologías y Componentes de Datos Inteligentes
+
+### 4.1. Memoria Semántica y Asistente Agroclimático RAG (Qdrant)
+- **Base Vectorial:** [Qdrant](https://qdrant.tech/) con colección `documentos_amazonia` y métrica de distancia de Coseno.
+- **Funcionamiento Híbrido Automático:** Se conecta al servidor Qdrant en red (`http://localhost:6333`) si está disponible; en caso contrario, activa su **motor embebido local en disco** (`data/qdrant_storage/`), garantizando disponibilidad en computadores de campo sin Docker ni Internet.
+- **Embeddings Deterministas Locales (128d):** Función de dispersión criptográfica por $n$-gramas con normalización Euclidiana $L_2$ ($\hat{\mathbf{v}} = \frac{\mathbf{v}}{\|\mathbf{v}\|_2}$), permitiendo calcular similitud semántica en CPU en milisegundos sin depender de OpenAI ni conexión a red.
+- **Base de Conocimiento (`knowledge_base/`):** Manuales técnicos sobre requerimientos hídricos de cultivos de la cuenca (yuca amarga y dulce, maíz amarillo, plátano hartón), protocolos de protección civil ante crecidas del Caroní y mantenimiento fotovoltaico de estaciones.
+
+### 4.2. Pipeline Medallion Lakehouse (DuckDB + Parquet ZSTD)
+Implementa la arquitectura columnar Medallion mediante el motor OLAP embebido **DuckDB 2.0.0**:
+- **Capa Bronze (`data/lakehouse/bronze/telemetria_raw.parquet`):**
+  - Ingesta inmutable desde la tabla `telemetria` de SQLite.
+  - Almacena el 100% de los datos crudos con el sello temporal `ingesta_lakehouse_ts` para auditoría.
+- **Capa Silver (`data/lakehouse/silver/telemetria_limpia.parquet`):**
+  - Deduplicación analítica mediante ventana SQL:
+    $$\text{ROW\_NUMBER}() \text{ OVER (PARTITION BY estacion\_id, timestamp ORDER BY id DESC)} = 1$$
+  - Filtro estricto de calidad: `WHERE estado_calidad = 'valid'`.
+  - Normalización de anomalías térmicas ($<-10^\circ\text{C}$ o $>60^\circ\text{C} \to \text{NULL}$).
+- **Capa Gold (Datamarts Analíticos Especializados):**
+  - `indicadores_horarios.parquet`: Agregaciones horarias (temperatura media/mín/máx, humedad media, lluvia acumulada, ráfagas de viento, voltaje promedio y total de lecturas).
+  - `indicadores_diarios.parquet`: Resumen bioclimático de 24 horas con amplitud térmica ($\Delta T = T_{\max} - T_{\min}$) y precipitación total diaria.
+  - `kpis_calidad_estaciones.parquet`: Evaluación de salud técnica (% de datos válidos vs recibidos, promedio de batería y señal RSSI).
+
+#### Consultas Analíticas Directas con DuckDB SQL:
+```python
+from src.lakehouse.manager import AmazonIALakehouse
+
+lh = AmazonIALakehouse()
+# Consultar indicadores Gold directamente sobre Parquet
+df_clima = lh.consultar_sql("""
+    SELECT estacion_id, date_trunc('day', hora) AS dia, 
+           AVG(temp_promedio) AS temp_media, SUM(precipitacion_acumulada) AS lluvia_total
+    FROM read_parquet('data/lakehouse/gold/indicadores_horarios.parquet')
+    GROUP BY estacion_id, date_trunc('day', hora)
+    ORDER BY dia DESC
+""")
+print(df_clima.head())
 ```
 
-### Flujo de calidad de datos
-
-Cada lectura se clasifica según el marco de Buelvas et al. (2023):
-
-| Estado | Condición |
-|---|---|
-| `valid` | Todos los campos presentes y dentro de rangos físicos |
-| `invalid` | Valor fuera de rango o tipo de dato incorrecto |
-| `incomplete` | Campo numérico ausente (pero campos obligatorios presentes) |
-
----
-
-## 🛠️ Tecnologías Utilizadas
-
-| Componente | Tecnología | Versión | Función |
-|:---|:---|:---|:---|
-| **API de Ingesta** | FastAPI | 0.115 | Recepción y validación de telemetría |
-| **Servidor ASGI** | Uvicorn | 0.32 | Servidor de producción para FastAPI |
-| **Modelos de datos** | Pydantic | 2.9 | Validación y serialización de esquemas |
-| **Persistencia local** | SQLite | 3.x | Buffer local Offline-First |
-| **Dashboard** | Streamlit | 1.40 | Visualización interactiva en tiempo real |
-| **Gráficos** | Plotly | 5.24 | Gráficos y series temporales interactivos |
-| **Análisis de datos** | Pandas | 2.x | Manipulación tabular en el dashboard |
-| **Mensajería IoT** | Mosquitto (MQTT) | 2.x | Broker para publicación de sensores |
-| **Cliente MQTT** | paho-mqtt | 2.x | Publicador y suscriptor en Python |
-| **Sincronización** | requests / httpx | 2.32 / 0.28 | Sincronización por lotes vía HTTP |
-| **Contenedores** | Docker + Compose | Latest | Despliegue portable de servicios |
-| **Pruebas** | Pytest | 8.3 | Suite de pruebas unitarias (25 tests) |
-| **Lenguaje** | Python | 3.11+ | Desarrollo principal |
+### 4.3. Orquestador de Pipelines (Apache Airflow y Runner Local)
+- **Apache Airflow (`dags/pipeline_amazonia.py`):** DAG orquestador calibrado con `EmptyOperator`, sondeo de Gateway, reintentos con backoff y pasaje de métricas por XCom.
+- **Runner Autónomo Local (`run_pipeline_local.py`):** Ejecuta en un solo proceso de Python las 5 etapas sin requerir Docker ni servicios externos:
+  1. Sincronización del buffer Edge.
+  2. Ingesta Bronze y Depuración Silver con DuckDB.
+  3. Agregaciones Gold (horarios, diarios, KPIs) con DuckDB.
+  4. Indexación de manuales en la memoria semántica Qdrant.
+  5. Evaluación de umbrales críticos comunitarios (crecidas, calor y batería).
 
 ---
 
-## 📁 Estructura del Repositorio
+## 5. Estructura del Repositorio
 
 ```
 amazonia4.0-mvp/
+├── README.md                          # Documentación central del proyecto
+├── informeTecnico.md                  # Informe técnico detallado de arquitectura e IA
+├── disenodearq.md                     # Documento formal C4 y especificación de capas
+├── requirements.txt                   # Dependencias de Python (.venv)
+├── proyect.toml                       # Configuración de herramientas (pytest, ruff)
+├── docker-compose.yml                 # Definición completa del stack contenerizado
+├── dockerfile                         # Imagen base de los microservicios
+├── start.py / start.bat               # Orquestador unificado de inicio rápido local
+├── run_pipeline_local.py              # Runner local del Pipeline Medallion & RAG
+├── airflow_init.bat                   # Inicializador automático de Airflow y usuario admin
 │
-├── README.md                    # Este archivo
-├── requirements.txt             # Dependencias de Python
-├── proyect.toml                 # Configuración de herramientas (pytest, ruff, black)
-├── docker-compose.yml           # Despliegue completo con Docker
-├── dockerfile                   # Imagen base del proyecto
-├── makefile                     # Comandos de desarrollo
-├── .env.example                 # Variables de entorno de ejemplo
-├── .gitignore
-│
-├── src/                         # Código fuente del MVP
-│   ├── __init__.py
-│   ├── config.py                # Configuración central y rangos de validación
-│   ├── database.py              # Persistencia SQLite (Offline-First)
-│   ├── validacion.py            # Motor de calidad de datos
-│   ├── api.py                   # API de ingesta (FastAPI)
-│   ├── simulador.py             # Simulador de estaciones (HTTP)
-│   ├── mqtt_publicador.py       # Publicador MQTT de sensores hacia Mosquitto
-│   ├── mqtt_suscriptor.py       # Suscriptor y Bridge MQTT hacia SQLite
-│   ├── sincronizacion.py        # Sincronización por lotes con reintentos
-│   └── dashboard.py             # Dashboard interactivo (Streamlit)
-│
-├── tests/                       # Pruebas unitarias (32 tests)
-│   ├── __init__.py
-│   ├── test_api.py              # Pruebas de endpoints FastAPI (7 tests)
-│   ├── test_database.py         # Pruebas de persistencia SQLite (7 tests)
-│   ├── test_validacion.py       # Pruebas del motor de calidad (11 tests)
-│   └── test_mqtt.py             # Pruebas de publicación y bridge MQTT (7 tests)
-│
-├── dags/                        # DAGs de Apache Airflow
-│   ├── pipeline_amazonia.py     # DAG principal del pipeline
-│   ├── utils/
+├── dags/                              # DAGs y scripts para Apache Airflow
+│   ├── pipeline_amazonia.py           # DAG principal del pipeline AmazonIA 4.0
 │   ├── scripts/
-│   └── config/
+│   │   ├── bronze_to_silver.py        # Ingesta Bronze y Depuración Silver (DuckDB)
+│   │   ├── silver_to_gold.py          # Generación de Datamarts Gold (DuckDB)
+│   │   └── rag_indexer.py             # Indexador de la base vectorial Qdrant
+│   └── utils/
+│       └── helpers.py                 # Utilidades de directorios y rutas
 │
-├── mosquitto/                   # Configuración del broker MQTT
-│   └── config/
-│       └── mosquitto.conf
+├── knowledge_base/                    # Base de conocimiento agronómico e hidrológico
+│   ├── agroclima_caroni.md            # Requerimientos de yuca, maíz y plátano
+│   ├── alertas_inundacion.md          # Protocolos de crecidas y Protección Civil
+│   └── mantenimiento_estaciones.md    # Salud de paneles, baterías y sensores
 │
-└── data/                        # Generado en tiempo de ejecución
-    └── telemetria.db            # Base de datos SQLite
+├── data/                              # Almacenamiento persistente local (Offline-First)
+│   ├── telemetria.db                  # Base de datos SQLite (Buffer transaccional)
+│   ├── qdrant_storage/                # Almacenamiento vectorial en disco de Qdrant
+│   └── lakehouse/                     # Almacenamiento columnar Parquet
+│       ├── bronze/telemetria_raw.parquet
+│       ├── silver/telemetria_limpia.parquet
+│       └── gold/
+│           ├── indicadores_horarios.parquet
+│           ├── indicadores_diarios.parquet
+│           └── kpis_calidad_estaciones.parquet
+│
+├── src/                               # Módulos del núcleo del sistema
+│   ├── config.py                      # Umbrales críticos y rutas de entorno
+│   ├── database.py                    # Persistencia transaccional SQLite (WAL)
+│   ├── validacion.py                  # Motor de calidad (Buelvas et al.)
+│   ├── api.py                         # API REST de ingesta y consultas (FastAPI)
+│   ├── dashboard.py                   # Dashboard con 9 pestañas y Chat RAG (Streamlit)
+│   ├── simulador.py                   # Generador de telemetría de campo
+│   ├── sincronizacion.py              # Agente de sincronización con backoff
+│   ├── mqtt_publicador.py             # Publicador de sensores hacia Mosquitto
+│   ├── mqtt_suscriptor.py             # Suscriptor y Bridge MQTT hacia SQLite
+│   ├── lakehouse/                     # Motor OLAP Medallion DuckDB
+│   │   ├── __init__.py
+│   │   └── manager.py                 # Clase AmazonIALakehouse
+│   └── rag/                           # Memoria semántica y RAG
+│       ├── __init__.py
+│       ├── vector_store.py            # Cliente y almacenamiento Qdrant
+│       └── engine.py                  # Motor de diagnóstico y razonamiento agroclimático
+│
+└── tests/                             # Suite de 55 pruebas automatizadas (pytest)
+    ├── test_api.py                    # 7 pruebas para endpoints FastAPI
+    ├── test_database.py               # 7 pruebas para persistencia SQLite
+    ├── test_validacion.py             # 11 pruebas de calidad de datos
+    ├── test_mqtt.py                   # 7 pruebas para mensajería Mosquitto
+    ├── test_rag.py                    # 6 pruebas para vector store y embeddings
+    ├── test_pipeline.py               # 7 pruebas para transformaciones del pipeline
+    └── test_lakehouse.py              # 10 pruebas directas para DuckDB Lakehouse
 ```
 
 ---
 
-## ✅ Requisitos Previos
+## 6. Guía de Ejecución: Modo Local (Offline-First sin Docker)
 
-- **Python 3.11 o superior** — [Descargar](https://www.python.org/downloads/)
-- **Git** — [Descargar](https://git-scm.com/)
-- **Docker** *(opcional, para despliegue con contenedores)* — [Descargar](https://www.docker.com/)
+El modo local está diseñado para desarrolladores, investigadores y operadores en campo. **No requiere Docker, PostgreSQL ni conexión a Internet.**
 
-```bash
-python --version    # Python 3.11+
-git --version       # git 2.x
-docker --version    # Opcional
-```
-
----
-
-## 🚀 Instalación
-
-### Opción 1: Instalación Local
+### 6.1. Instalación de Dependencias
 
 ```bash
 # 1. Clonar el repositorio
 git clone https://github.com/rodriguezjr/amazonIA.git
 cd amazonia4.0-mvp
 
-# 2. Crear entorno virtual
+# 2. Crear y activar entorno virtual
 python -m venv .venv
 
-# Windows
+# En Windows:
 .venv\Scripts\activate
-# Linux/macOS
+# En Linux/macOS:
 source .venv/bin/activate
 
-# 3. Instalar dependencias
+# 3. Instalar librerías
 pip install --upgrade pip
 pip install -r requirements.txt
 
-# 4. Configurar variables de entorno
+# 4. Crear archivo de variables de entorno
 cp .env.example .env
-
-# 5. Inicializar la base de datos
-python -c "from src.database import init_database; init_database()"
-
-# 6. Verificar instalación (deben pasar 32 tests)
-pytest tests/ -v
 ```
 
----
+### 6.2. Despliegue Unificado con un Solo Comando (`start.py`)
 
-## 🎯 Despliegue Rápido Local (Un Solo Comando)
-
-Para evitar abrir múltiples terminales, el proyecto cuenta con un **orquestador unificado**:
+Para no abrir múltiples ventanas de terminal, el proyecto cuenta con un orquestador unificado de procesos:
 
 ```bash
-# Iniciar todo (API + Dashboard + Simulador) en una sola ventana:
+# Ejecutar todo el sistema (API + Dashboard + Simulador de sensores):
 python start.py
 ```
-> En Windows también puedes simplemente hacer **doble clic en `start.bat`**.
+> **En Windows:** Puedes simplemente hacer doble clic en el archivo **`start.bat`**.
 
-Esto automáticamente:
+Este comando automáticamente:
 1. Verifica e inicializa la base de datos SQLite si es necesario.
-2. Inicia la **API FastAPI** en segundo plano (`:8000`).
-3. Inicia el **Dashboard Streamlit** (`:8501`).
-4. Inicia el **Simulador de telemetría**.
-5. Abre tu navegador automáticamente en el Dashboard.
-6. Al presionar **Ctrl+C**, apaga y limpia todos los procesos de forma segura.
+2. Inicia la **API FastAPI** en segundo plano (`http://localhost:8000`).
+3. Inicia el **Dashboard Streamlit** (`http://localhost:8501`).
+4. Inicia el **Simulador de telemetría** que genera lecturas continuas.
+5. Abre el navegador web automáticamente en el Dashboard.
+6. Al presionar `Ctrl + C`, apaga de forma segura todos los subprocesos.
 
-**Opciones de ejecución rápida:**
+#### Modos de Ejecución Opcionales:
 ```bash
-python start.py --modo http           # Modo REST API por defecto
-python start.py --modo mqtt           # Inicia Bridge MQTT y Publicador Mosquitto
-python start.py --sin-simulador       # Inicia solo API y Dashboard (sin datos simulados)
+python start.py --sin-simulador    # Inicia solo API y Dashboard (sin datos simulados)
+python start.py --modo mqtt        # Inicia con Bridge MQTT y Publicador Mosquitto
 ```
 
----
+### 6.3. Ejecución del Pipeline Analítico Completo Medallion & RAG
 
-## 🛠️ Uso Manual del Sistema (Módulo por Módulo)
-
-Si prefieres ejecutar cada componente por separado en terminales independientes:
-
-### 1. Iniciar la API de Ingesta
+Para procesar los datos de SQLite, actualizar las capas Parquet (Bronze $\to$ Silver $\to$ Gold) e indexar el conocimiento RAG en Qdrant:
 
 ```bash
-uvicorn src.api:app --host 0.0.0.0 --port 8000 --reload
+python run_pipeline_local.py
 ```
 
-Verificar que está funcionando:
+**Salida generada:**
+```text
+=================================================================
+   AMAZONIA 4.0 - PIPELINE MEDALLION DUCKDB & IA (OFFLINE-FIRST)
+=================================================================
+[1/5] Sincronizacion Edge Buffer...
+      [OK] Sincronizacion completada
+[2/5] Capa Bronze -> Silver (Ingesta & Limpieza DuckDB SQL)...
+      [OK] Total Bronze leidos: 864 registros (21.27 KB)
+      [OK] Registros validos en Silver: 591 registros (16.81 KB)
+[3/5] Capa Gold (Datamarts Analiticos DuckDB)...
+      [OK] Agregaciones horarias calculadas: 23
+      [OK] Resumenes diarios generados: 15
+      [OK] KPIs de estaciones evaluados: 8
+[4/5] Indexacion RAG (Memoria Semantica Qdrant)...
+      [OK] Documentos tecnicos indexados: 10 chunks en 'documentos_amazonia'
+[5/5] Evaluacion de Umbrales de Alerta...
+      [OK] Evaluacion finalizada.
+=================================================================
+   [EXITO] PIPELINE COMPLETADO SATISFACTORIAMENTE
+   Almacenamiento Lakehouse Parquet:
+     - Capa BRONZE: 1 archivo(s), 21.27 KB
+     - Capa SILVER: 1 archivo(s), 16.81 KB
+     - Capa GOLD: 3 archivo(s), 6.47 KB
+=================================================================
+```
+
+### 6.4. Ejecución del Conjunto de Pruebas Automatizadas (55 Tests)
 
 ```bash
-curl http://localhost:8000/health
-# {"status": "ok", "timestamp": "2026-10-15T10:30:00"}
-```
-
-La documentación interactiva (Swagger UI) está disponible en: **http://localhost:8000/docs**
-
-### 2. Ejecutar el Simulador de Telemetría
-
-El simulador genera datos sintéticos realistas para las estaciones `CARONI-001` y `CARONI-002`, enviando un 80% de lecturas válidas, 10% inválidas y 10% incompletas.
-
-```bash
-python -m src.simulador
-```
-
-Salida esperada:
-
-```
-[SIMULADOR] Iniciando estación CARONI-001
-[CARONI-001] 2026-10-15T10:30:00 → valid
-[CARONI-001] 2026-10-15T10:30:10 → valid
-[CARONI-001] 2026-10-15T10:30:20 → invalid
-[CARONI-001] 2026-10-15T10:30:30 → incomplete | 1 alerta(s)
-```
-
-### 3. Iniciar el Dashboard
-
-```bash
-streamlit run src/dashboard.py
-# Abre http://localhost:8501
-```
-
-El dashboard incluye:
-- 📊 **Indicadores actuales** — temperatura, humedad, precipitación y voltaje de batería
-- 📈 **Series temporales** — temperatura, humedad y precipitación
-- ✅ **Distribución de calidad** — gráfico de torta `valid / invalid / incomplete`
-- 📋 **Tabla de datos recientes** — últimas 20 lecturas
-- 🚨 **Alertas activas** — lluvia intensa, calor extremo, batería baja, viento fuerte
-
-### 4. Sincronización por Lotes
-
-La sincronización envía los datos acumulados en SQLite al endpoint batch de la API:
-
-```bash
-python -c "
-from src.sincronizacion import sincronizar_todo
-resultado = sincronizar_todo()
-print(resultado)
-"
-```
-
-Salida esperada:
-
-```json
-{
-  "total_enviados": 150,
-  "total_exitosos": 150,
-  "estado": "completado"
-}
-```
-
-### 5. Ingesta y Publicación mediante MQTT (Mosquitto)
-
-El proyecto incluye soporte nativo para mensajería IoT con Eclipse Mosquitto:
-
-```
-Sensor (mqtt_publicador) ──[MQTT pub]──> Mosquitto (:1883) ──[MQTT sub]──> Bridge (mqtt_suscriptor) ──> SQLite
-                                                                                  │
-                                                                           [alerta pub]
-                                                                                  ↓
-                                                                     amazonia/caroni/{id}/alertas
-```
-
-**Paso 1: Levantar el broker Mosquitto (Docker)**
-```bash
-docker-compose up -d mosquitto
-```
-
-**Paso 2: Iniciar el Bridge MQTT a SQLite (en una terminal)**
-```bash
-python -m src.mqtt_suscriptor
-```
-
-**Paso 3: Iniciar el Publicador de Sensores MQTT (en otra terminal)**
-```bash
-# Publicar estación CARONI-001 cada 5 segundos
-python -m src.mqtt_publicador --estacion CARONI-001 --intervalo 5
-```
-
-**Tópicos MQTT utilizados:**
-| Tópico | Dirección | Descripción |
-|---|---|---|
-| `amazonia/caroni/{id}/telemetria` | Sensor → Broker | Lecturas crudas del sensor en JSON |
-| `amazonia/caroni/{id}/alertas` | Bridge → Broker | Alertas críticas republicadas en tiempo real |
-| `amazonia/caroni/{id}/status` | Sensor → Broker | Estado operativo de la estación |
-
----
-
-## 📡 API Reference
-
-### Endpoints disponibles
-
-| Método | Endpoint | Descripción |
-|---|---|---|
-| `GET` | `/` | Información de la API |
-| `GET` | `/health` | Estado del sistema |
-| `POST` | `/ingesta` | Ingestar un registro individual |
-| `POST` | `/ingesta/batch` | Ingestar un lote de registros |
-| `GET` | `/telemetria/ultimas` | Últimas lecturas (paginado) |
-| `GET` | `/telemetria/estadisticas` | Estadísticas de calidad |
-| `GET` | `/telemetria/estaciones` | Lista de estaciones registradas |
-| `GET` | `/sincronizacion/pendientes` | Registros pendientes de sincronizar |
-
-### Ejemplo: Ingestar telemetría
-
-```bash
-curl -X POST http://localhost:8000/ingesta \
-  -H "Content-Type: application/json" \
-  -d '{
-    "estacion_id": "CARONI-001",
-    "timestamp": "2026-10-15T10:30:00",
-    "temperatura": 28.5,
-    "humedad": 75.0,
-    "presion": 1013.25,
-    "precipitacion": 0.0,
-    "viento": 5.2,
-    "voltaje_bateria": 3.8,
-    "rssi": -85
-  }'
-```
-
-Respuesta:
-
-```json
-{
-  "id": 42,
-  "estado_calidad": "valid",
-  "errores": null,
-  "alertas": []
-}
-```
-
-### Rangos de validación
-
-| Variable | Mínimo | Máximo | Unidad |
-|---|---|---|---|
-| `temperatura` | -10.0 | 45.0 | °C |
-| `humedad` | 0.0 | 100.0 | % |
-| `presion` | 800.0 | 1100.0 | hPa |
-| `precipitacion` | 0.0 | 500.0 | mm |
-| `viento` | 0.0 | 150.0 | km/h |
-| `voltaje_bateria` | 3.0 | 4.2 | V |
-| `rssi` | -120 | 0 | dBm |
-
-### Umbrales de alerta
-
-| Alerta | Umbral | Severidad |
-|---|---|---|
-| Lluvia intensa | precipitación > 50 mm | Alta |
-| Calor extremo | temperatura > 40 °C | Alta |
-| Batería baja | voltaje < 3.2 V | Media |
-| Viento fuerte | viento > 80 km/h | Media |
-
----
-
-## 🧪 Pruebas Unitarias
-
-El proyecto cuenta con **32 tests** distribuidos en 4 módulos:
-
-```bash
-# Ejecutar todos los tests
 pytest tests/ -v
-
-# Con reporte de cobertura
-pytest tests/ -v --cov=src --cov-report=html
 ```
 
-| Archivo | Tests | Cobertura |
-|---|---|---|
-| `test_api.py` | 7 | Endpoints FastAPI, ingesta individual y batch |
-| `test_database.py` | 7 | Inserción, consulta y sincronización SQLite |
-| `test_validacion.py` | 11 | Motor de calidad y sistema de alertas |
-| `test_mqtt.py` | 7 | Publicación, bridge y persistencia MQTT |
-
-Resultado esperado: **`32 passed`**
+Todos los módulos cuentan con cobertura de pruebas unitarias:
+- `test_api.py` (7 tests): Endpoints de salud, ingesta, batch y alertas.
+- `test_database.py` (7 tests): Inicialización de tablas, índices e inserción.
+- `test_validacion.py` (11 tests): Rangos físicos, completitud y clasificación de calidad.
+- `test_mqtt.py` (7 tests): Serialización de tramas, conexión y tópicos.
+- `test_rag.py` (6 tests): Embeddings 128d, almacenamiento en Qdrant y diagnóstico RAG.
+- `test_pipeline.py` (7 tests): Integración Bronze $\to$ Silver $\to$ Gold y consistencia.
+- `test_lakehouse.py` (10 tests): DuckDB SQL, deduplicación analítica y consultas ad-hoc.
 
 ---
 
-## ⚙️ Variables de Entorno
+## 7. Guía de Ejecución: Modo Contenedores (Docker & Airflow Stack)
 
-Copia `.env.example` a `.env` y ajusta según tu entorno:
+El modo contenedores está diseñado para despliegue en servidores, clústeres o estaciones centrales donde se requiera orquestación programada con **Apache Airflow**.
+
+### 7.1. Requisitos de Docker
+- Docker Engine 24.x o superior.
+- Docker Compose v2.x (`docker compose`).
+- Al menos 4 GB de memoria RAM asignada al demonio de Docker.
+
+### 7.2. Inicialización de Airflow (`airflow_init.bat`)
+
+Antes de levantar el stack por primera vez, es necesario inicializar la base de datos de metadatos de Airflow y crear el usuario administrador:
 
 ```bash
-cp .env.example .env
+# En Windows:
+airflow_init.bat
+
+# En Linux / macOS:
+docker compose up -d postgres redis
+docker compose run --rm airflow-init
 ```
 
-| Variable | Por defecto | Descripción |
+El script creará automáticamente el usuario con credenciales:
+- **Usuario:** `admin`
+- **Contraseña:** `admin123`
+
+### 7.3. Despliegue del Stack Completo
+
+```bash
+# Levantar todos los servicios en segundo plano:
+docker compose up -d
+```
+
+#### Servicios Levantados en el Stack:
+1. `amazonia-postgres`: Base de datos de metadatos de Airflow (:5432).
+2. `amazonia-redis`: Broker de mensajes Celery para tareas de Airflow (:6379).
+3. `amazonia-airflow-webserver`: Interfaz web de Apache Airflow (:8080).
+4. `amazonia-airflow-scheduler`: Planificador y monitor de DAGs.
+5. `amazonia-airflow-worker`: Ejecutor distribuido de tareas del pipeline.
+6. `amazonia-qdrant`: Servidor vectorial semántico (:6333, :6334).
+7. `amazonia-mosquitto`: Broker de mensajería IoT MQTT (:1883).
+8. `amazonia-api`: API REST FastAPI (:8000).
+9. `amazonia-dashboard`: Dashboard analítico Streamlit (:8501).
+
+### 7.4. Accesos a Interfaces y Credenciales
+
+| Servicio | URL Local | Credenciales / Notas |
 |---|---|---|
-| `API_HOST` | `localhost` | Host de la API |
-| `API_PORT` | `8000` | Puerto de la API |
-| `DB_PATH` | `data/telemetria.db` | Ruta de la base de datos SQLite |
-| `SYNC_ENDPOINT` | `http://localhost:8000/ingesta/batch` | Endpoint de sincronización |
-| `SYNC_BATCH_SIZE` | `100` | Registros por lote de sincronización |
-| `SYNC_MAX_RETRIES` | `3` | Reintentos ante fallo de conexión |
-| `MQTT_BROKER` | `localhost` | Host del broker Mosquitto |
-| `MQTT_PORT` | `1883` | Puerto MQTT |
-| `MQTT_TOPIC_PREFIX` | `amazonia/caroni` | Prefijo de tópicos MQTT |
+| **Streamlit Dashboard** | [http://localhost:8501](http://localhost:8501) | Acceso directo sin autenticación |
+| **Documentación API (Swagger)** | [http://localhost:8000/docs](http://localhost:8000/docs) | Endpoints interactivos OpenAPI |
+| **Apache Airflow Webserver** | [http://localhost:8080](http://localhost:8080) | **User:** `admin` \| **Pass:** `admin123` |
+| **Qdrant Vector Dashboard** | [http://localhost:6333/dashboard](http://localhost:6333/dashboard) | Consola visual de colecciones y puntos |
+| **Broker MQTT Mosquitto** | `localhost:1883` | Tópicos: `amazonia/caroni/+/telemetria` |
+
+### 7.5. Detención y Mantenimiento de Contenedores
+
+```bash
+# Ver estado y consumo de los contenedores:
+docker compose ps
+
+# Ver registros de logs en tiempo real:
+docker compose logs -f airflow-scheduler
+
+# Detener todos los servicios preservando volúmenes:
+docker compose down
+
+# Detener y reiniciar limpiando volúmenes (Precaución: borra datos de prueba):
+docker compose down -v
+```
 
 ---
 
-## 🗄️ Estructura de la Base de Datos
+## 8. Marco de Calidad de Datos (Buelvas et al., 2023)
 
-### Tabla `telemetria`
+Cada medición capturada pasa por el motor de validación en tiempo real antes de consolidarse en la base de datos:
 
-| Columna | Tipo | Descripción |
-|---|---|---|
-| `id` | INTEGER PK | Identificador autoincremental |
-| `estacion_id` | TEXT | Identificador de la estación |
-| `timestamp` | TEXT | Marca de tiempo ISO 8601 |
-| `temperatura` | REAL | Temperatura en °C |
-| `humedad` | REAL | Humedad relativa en % |
-| `presion` | REAL | Presión atmosférica en hPa |
-| `precipitacion` | REAL | Precipitación en mm |
-| `viento` | REAL | Velocidad del viento en km/h |
-| `voltaje_bateria` | REAL | Voltaje de batería en V |
-| `rssi` | INTEGER | Intensidad de señal en dBm |
-| `estado_calidad` | TEXT | `valid` / `invalid` / `incomplete` |
-| `errores` | TEXT | Descripción de errores (nullable) |
-| `sincronizado` | INTEGER | `0` pendiente / `1` sincronizado |
-| `fecha_recepcion` | TEXT | Timestamp de recepción en el gateway |
+| Variable | Unidad | Rango Físico Válido | Umbral de Alerta Comunitaria |
+|---|---|---|---|
+| **Temperatura** | °C | $-10.0 \le T \le 45.0$ | $> 38.0\,^\circ\text{C}$ (Calor extremo) |
+| **Humedad Relativa** | % | $0.0 \le H \le 100.0$ | $< 25.0\,\%$ (Riesgo de incendios) |
+| **Presión Atmosférica** | hPa | $800.0 \le P \le 1100.0$ | Variación brusca $> 5\,\text{hPa/h}$ |
+| **Precipitación** | mm | $0.0 \le R \le 300.0$ | $> 50.0\,\text{mm/24h}$ (Crecida del Caroní) |
+| **Velocidad del Viento** | km/h | $0.0 \le V \le 150.0$ | $> 40.0\,\text{km/h}$ (Ráfagas peligrosas) |
+| **Voltaje de Batería** | V | $2.5 \le B \le 5.0$ | $< 3.40\,\text{V}$ (Batería baja fotovoltaica) |
+| **Señal de Radio (RSSI)** | dBm | $-120 \le \text{RSSI} \le 0$ | $< -105\,\text{dBm}$ (Pérdida de enlace) |
 
-### Tabla `log_sincronizacion`
-
-| Columna | Tipo | Descripción |
-|---|---|---|
-| `id` | INTEGER PK | Identificador |
-| `timestamp` | TEXT | Momento de la sincronización |
-| `registros_enviados` | INTEGER | Total de registros enviados |
-| `registros_exitosos` | INTEGER | Registros confirmados por el servidor |
-| `estado` | TEXT | `exitoso` / `fallido` |
-| `mensaje` | TEXT | Detalle del resultado |
+- **`valid`:** Todos los parámetros se encuentran presentes y dentro de límites físicos normales.
+- **`invalid`:** Alguno de los parámetros viola los rangos físicos (e.g., $150^\circ\text{C}$).
+- **`incomplete`:** Falta un valor no crítico pero la trama preserva identificación y tiempo.
 
 ---
 
-## 👥 Autores
+## 9. Referencia de Endpoints API REST
 
-| Nombre | C.I. |
-|---|---|
-| Barrios, Massiel | 27.375.910 | 
-| Pizzanni, Luis | 27.765.210 |
-| Rodríguez, Junior | 23.730.853 |
-**Profesora:** Profa. Borjas, Livia  
+La API REST expone endpoints documentados bajo la especificación OpenAPI en `http://localhost:8000/docs`:
+
+- `GET /health`: Comprobación de estado operativo del Edge Gateway.
+- `POST /ingesta/telemetria`: Ingesta unitaria de una lectura de sensor con validación inmediata.
+- `POST /ingesta/batch`: Ingesta masiva por lotes de tramas almacenadas en ráfagas.
+- `GET /consultas/ultimas`: Recupera las últimas lecturas registradas (soporta filtro por estación).
+- `GET /consultas/filtradas`: Consulta por rango temporal y estación.
+- `GET /alertas`: Lista las condiciones anómalas activas detectadas en la cuenca.
+- `GET /calidad/resumen`: Estadísticas globales de registros válidos, inválidos e incompletos.
+
+---
+
+## 10. Documentos Técnicos y Académicos Complementarios
+
+En la raíz del repositorio se encuentran disponibles los informes exhaustivos de ingeniería y arquitectura:
+- **[`informeTecnico.md`](informeTecnico.md):** Documento técnico detallado con formulación matemática de los embeddings, código fuente comentado del reranker y la interfaz visual, y plan de despliegue en Kubernetes (StatefulSets, PVCs, HPAs).
+- **[`disenodearq.md`](disenodearq.md):** Documento formal de arquitectura de datos bajo el **Modelo C4** (Contexto, Contenedores, Componentes), especificación pormenorizada de capas y estrategia de ingeniería adaptada a las restricciones extremas del sur de Venezuela.
+
+---
+
+## 11. Autores y Créditos Académicos
+
+Proyecto desarrollado en el marco de la asignatura **Tipos de Datos Inteligentes** del programa de **Maestría en Tecnologías de la Información**:
+
+- **Massiel Barrios** — C.I. 27.375.910
+- **Luis Pizzanni** — C.I. 27.765.210
+- **Junior Rodríguez** — C.I. 23.730.853
+
+**Docente Asesora:** Profa. Livia Borjas  
 **Institución:** Universidad Nacional Experimental de Guayana (UNEG)  
-**Programa:** Maestría en Tecnologías de la Información
-
----
-
-## 📚 Referencias
-
-- Buelvas et al. (2023). *Marco de calidad de datos para telemetría IoT en entornos rurales.*
-- FastAPI. (2024). *FastAPI Documentation.* https://fastapi.tiangolo.com/
-- Eclipse Foundation. (2024). *Eclipse Mosquitto MQTT Broker.* https://mosquitto.org/
-- Streamlit Inc. (2024). *Streamlit Documentation.* https://docs.streamlit.io/
-- Python Software Foundation. (2024). *Python 3.11 Documentation.* https://docs.python.org/3.11/
+**Sede:** Puerto Ordaz, Estado Bolívar, Venezuela  
+**Año:** 2026
