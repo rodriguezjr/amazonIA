@@ -84,6 +84,12 @@ with st.sidebar:
         help="Máximo de lecturas a traer de la base de datos local SQLite.",
     )
 
+    filtrar_anomalias = st.checkbox(
+        "🛡️ Filtrar anomalías en gráficas (Recomendado)",
+        value=True,
+        help="Excluye lecturas con estado 'invalid' de las curvas y estadísticas analíticas (Mín, Máx, Media, Desv. Estándar) para evitar distorsión de escala.",
+    )
+
     st.markdown("---")
     st.markdown("### 📡 Estado del Sistema")
     st.success("🟢 Edge Gateway (SQLite Offline-First)")
@@ -122,7 +128,17 @@ if df.empty:
 
 # Ordenar cronológicamente para trazado coherente
 df_sorted = df.sort_values("timestamp")
-ultimo = df_sorted.iloc[-1]
+
+# Conjunto depurado para métricas estadísticas y trazado de curvas
+if filtrar_anomalias:
+    df_graficos = df_sorted[df_sorted["estado_calidad"] == "valid"].copy()
+    if df_graficos.empty:
+        df_graficos = df_sorted.copy()
+else:
+    df_graficos = df_sorted.copy()
+
+# Última lectura (prioriza la última lectura válida si el filtro está activo)
+ultimo = df_graficos.iloc[-1] if not df_graficos.empty else df_sorted.iloc[-1]
 
 # ==============================================================================
 # SECCIÓN 1: INDICADORES Y KPIS ACTUALES
@@ -176,7 +192,8 @@ with col5:
 # ==============================================================================
 st.markdown("---")
 st.subheader("📈 Monitoreo de Variables y Asistencia Inteligente")
-st.markdown(f"*Mostrando {len(df_sorted)} registros ({ventana_sel})*")
+filtro_badge = " • 🛡️ **Filtro de anomalías activado** (Curvas y estadísticas depuradas)" if filtrar_anomalias else " • ⚠️ **Modo Crudo** (Mostrando todas las lecturas)"
+st.markdown(f"*Total registros: **{len(df_sorted)}** | Válidos en gráficas: **{len(df_graficos)}** ({ventana_sel}){filtro_badge}*")
 
 (
     tab_rag,
@@ -289,7 +306,7 @@ with tab_rag:
 with tab_temp:
     st.markdown("#### Dinámica de Temperatura (°C)")
     c1, c2, c3, c4 = st.columns(4)
-    t_series = df_sorted["temperatura"].dropna()
+    t_series = df_graficos["temperatura"].dropna()
     if not t_series.empty:
         c1.metric("Mínima", f"{t_series.min():.1f} °C")
         c2.metric("Media", f"{t_series.mean():.1f} °C")
@@ -297,7 +314,7 @@ with tab_temp:
         c4.metric("Desv. Estándar", f"{t_series.std():.2f}")
 
     fig = px.line(
-        df_sorted,
+        df_graficos,
         x="timestamp",
         y="temperatura",
         color="estacion_id" if estacion_sel == "Todas" else None,
@@ -321,14 +338,14 @@ with tab_temp:
 with tab_hum:
     st.markdown("#### Humedad Relativa (%)")
     c1, c2, c3 = st.columns(3)
-    h_series = df_sorted["humedad"].dropna()
+    h_series = df_graficos["humedad"].dropna()
     if not h_series.empty:
         c1.metric("Mínima", f"{h_series.min():.1f} %")
         c2.metric("Promedio", f"{h_series.mean():.1f} %")
         c3.metric("Máxima", f"{h_series.max():.1f} %")
 
     fig = px.line(
-        df_sorted,
+        df_graficos,
         x="timestamp",
         y="humedad",
         color="estacion_id" if estacion_sel == "Todas" else None,
@@ -344,14 +361,14 @@ with tab_hum:
 with tab_prec:
     st.markdown("#### Registro de Precipitación Pluvial (mm)")
     c1, c2, c3 = st.columns(3)
-    p_series = df_sorted["precipitacion"].dropna()
+    p_series = df_graficos["precipitacion"].dropna()
     if not p_series.empty:
         c1.metric("Acumulada en ventana", f"{p_series.sum():.1f} mm")
         c2.metric("Pico Máximo", f"{p_series.max():.1f} mm")
         c3.metric("Lecturas con lluvia", f"{(p_series > 0).sum()}")
 
     fig = px.bar(
-        df_sorted,
+        df_graficos,
         x="timestamp",
         y="precipitacion",
         color="estacion_id" if estacion_sel == "Todas" else None,
@@ -374,14 +391,14 @@ with tab_prec:
 with tab_pres:
     st.markdown("#### Presión Barométrica (hPa)")
     c1, c2, c3 = st.columns(3)
-    pr_series = df_sorted["presion"].dropna()
+    pr_series = df_graficos["presion"].dropna()
     if not pr_series.empty:
         c1.metric("Mínima", f"{pr_series.min():.2f} hPa")
         c2.metric("Media", f"{pr_series.mean():.2f} hPa")
         c3.metric("Máxima", f"{pr_series.max():.2f} hPa")
 
     fig = px.line(
-        df_sorted,
+        df_graficos,
         x="timestamp",
         y="presion",
         color="estacion_id" if estacion_sel == "Todas" else None,
@@ -397,14 +414,14 @@ with tab_pres:
 with tab_viento:
     st.markdown("#### Velocidad del Viento (km/h)")
     c1, c2, c3 = st.columns(3)
-    v_series = df_sorted["viento"].dropna()
+    v_series = df_graficos["viento"].dropna()
     if not v_series.empty:
         c1.metric("Velocidad Media", f"{v_series.mean():.1f} km/h")
         c2.metric("Ráfaga Máxima", f"{v_series.max():.1f} km/h")
         c3.metric("Calmas (0 km/h)", f"{(v_series == 0).sum()}")
 
     fig = px.area(
-        df_sorted,
+        df_graficos,
         x="timestamp",
         y="viento",
         color="estacion_id" if estacion_sel == "Todas" else None,
@@ -427,14 +444,14 @@ with tab_viento:
 with tab_bat:
     st.markdown("#### Estado de Energía y Batería (V)")
     c1, c2, c3 = st.columns(3)
-    b_series = df_sorted["voltaje_bateria"].dropna()
+    b_series = df_graficos["voltaje_bateria"].dropna()
     if not b_series.empty:
         c1.metric("Voltaje Actual", f"{b_series.iloc[-1]:.2f} V")
         c2.metric("Mínimo Registrado", f"{b_series.min():.2f} V")
         c3.metric("Nivel Crítico (< 3.2V)", f"{(b_series < 3.2).sum()} lecturas")
 
     fig = px.line(
-        df_sorted,
+        df_graficos,
         x="timestamp",
         y="voltaje_bateria",
         color="estacion_id" if estacion_sel == "Todas" else None,
@@ -457,14 +474,14 @@ with tab_bat:
 with tab_rssi:
     st.markdown("#### Calidad de Enlace y Señal RSSI (dBm)")
     c1, c2, c3 = st.columns(3)
-    r_series = df_sorted["rssi"].dropna()
+    r_series = df_graficos["rssi"].dropna()
     if not r_series.empty:
         c1.metric("RSSI Actual", f"{r_series.iloc[-1]:.0f} dBm")
         c2.metric("Mejor Señal", f"{r_series.max():.0f} dBm")
         c3.metric("Peor Señal", f"{r_series.min():.0f} dBm")
 
     fig = px.line(
-        df_sorted,
+        df_graficos,
         x="timestamp",
         y="rssi",
         color="estacion_id" if estacion_sel == "Todas" else None,
@@ -480,7 +497,7 @@ with tab_rssi:
 with tab_comparativa:
     st.markdown("#### Correlación Temperatura vs Humedad")
     fig_scatter = px.scatter(
-        df_sorted,
+        df_graficos,
         x="temperatura",
         y="humedad",
         color="estacion_id" if estacion_sel == "Todas" else None,
@@ -521,50 +538,123 @@ with col_izq:
 
 with col_der:
     st.subheader("🚨 Detección de Alertas en Ventana")
+    st.caption(f"Supervisión continua sobre {len(df_sorted)} registros de la ventana activa.")
+    
     alertas_detectadas = []
-    for _, row in df_sorted.tail(50).iterrows():
+    
+    # Evaluar todas las filas de la ventana para alertas climáticas y fallas de calidad
+    for _, row in df_sorted.iterrows():
         est_id = row.get("estacion_id", "ESTACION")
         ts_str = str(row.get("timestamp", ""))
         p_val = row.get("precipitacion")
         t_val = row.get("temperatura")
         b_val = row.get("voltaje_bateria")
         v_val = row.get("viento")
+        calidad_val = str(row.get("estado_calidad", "")).lower()
+        err_msg = row.get("errores")
 
+        # 1. Alertas de Fallas de Calidad de Datos (Buelvas et al.)
+        if calidad_val == "invalid":
+            detalle_err = f": *{err_msg}*" if err_msg and pd.notna(err_msg) else " (Valores fuera de rango físico)"
+            alertas_detectadas.append(f"❌ **Falla de Calidad / Sensor Inválido** en `{est_id}`{detalle_err} a las `{ts_str}`")
+        elif calidad_val == "incomplete":
+            alertas_detectadas.append(f"⚠️ **Telemetría Incompleta** en `{est_id}` a las `{ts_str}`")
+
+        # 2. Alertas Meteorológicas Críticas
         if pd.notna(p_val) and p_val > UMBRALES_ALERTA["precipitacion_intensa"]:
-            alertas_detectadas.append(f"⚠️ **Lluvia Intensa** en {est_id} ({p_val} mm) a las {ts_str}")
-        if pd.notna(t_val) and t_val > UMBRALES_ALERTA["calor_extremo"]:
-            alertas_detectadas.append(f"🔥 **Calor Extremo** en {est_id} ({t_val} °C) a las {ts_str}")
+            alertas_detectadas.append(f"🌧️ **Lluvia Intensa** en `{est_id}` ({p_val:.1f} mm) a las `{ts_str}`")
+        if pd.notna(t_val) and t_val > UMBRALES_ALERTA["calor_extremo"] and calidad_val == "valid":
+            alertas_detectadas.append(f"🔥 **Calor Extremo** en `{est_id}` ({t_val:.1f} °C) a las `{ts_str}`")
         if pd.notna(b_val) and b_val < UMBRALES_ALERTA["bateria_baja"]:
-            alertas_detectadas.append(f"🔋 **Batería Baja** en {est_id} ({b_val:.2f} V) a las {ts_str}")
+            alertas_detectadas.append(f"🔋 **Batería Baja** en `{est_id}` ({b_val:.2f} V) a las `{ts_str}`")
         if pd.notna(v_val) and v_val > UMBRALES_ALERTA["viento_fuerte"]:
-            alertas_detectadas.append(f"💨 **Viento Fuerte** en {est_id} ({v_val} km/h) a las {ts_str}")
+            alertas_detectadas.append(f"💨 **Viento Fuerte** en `{est_id}` ({v_val:.1f} km/h) a las `{ts_str}`")
 
     if alertas_detectadas:
-        for alerta in alertas_detectadas[-8:]:  # Mostrar las más recientes
-            st.warning(alerta)
+        st.warning(f"⚠️ Se detectaron **{len(alertas_detectadas)} eventos / anomalías** en esta ventana temporal.")
+        # Mostrar las más recientes (últimas 8)
+        for alerta in alertas_detectadas[-8:]:
+            st.markdown(alerta)
+        
+        if len(alertas_detectadas) > 8:
+            with st.expander(f"📜 Ver todas las {len(alertas_detectadas)} alertas de la ventana"):
+                for a in reversed(alertas_detectadas[:-8]):
+                    st.markdown(f"- {a}")
     else:
-        st.success("✅ No se detectaron condiciones anómalas ni alertas en este rango.")
+        st.success("✅ No se detectaron condiciones anómalas ni fallas de calidad en este rango.")
 
 
 # ==============================================================================
-# SECCIÓN 4: TABLA DE DATOS RECIENTES
+# SECCIÓN 4: TABLA DE REGISTROS RECIENTES CON RESALTADO EN ROJO
 # ==============================================================================
 st.markdown("---")
 st.subheader("📋 Tabla de Registros Recientes")
+st.caption("Las variables y tramas con estado `invalid` se resaltan automáticamente en **rojo** para facilitar el diagnóstico de campo.")
+
+columnas_tabla = [
+    "estacion_id",
+    "timestamp",
+    "temperatura",
+    "humedad",
+    "presion",
+    "precipitacion",
+    "viento",
+    "voltaje_bateria",
+    "rssi",
+    "estado_calidad",
+    "errores",
+]
+columnas_existentes = [c for c in columnas_tabla if c in df_sorted.columns]
+df_tabla = df_sorted[columnas_existentes].tail(40).copy()
+
+def resaltar_anomalias_celdas(row):
+    """
+    Aplica estilo visual a las celdas:
+    Si la fila es 'invalid', resalta en rojo la variable específica fuera de rango
+    y la etiqueta de calidad.
+    """
+    estilos = [""] * len(row)
+    columnas = list(row.index)
+    es_invalida = str(row.get("estado_calidad", "")).lower() == "invalid"
+    
+    # CSS para resaltar celda en rojo
+    estilo_rojo_critico = "background-color: #ffcccc; color: #990000; font-weight: bold; border-radius: 3px;"
+    estilo_texto_error = "color: #b30000; font-weight: bold; font-style: italic;"
+
+    for idx, col in enumerate(columnas):
+        val = row[col]
+        
+        # Resaltar la celda del estado de calidad
+        if col == "estado_calidad" and es_invalida:
+            estilos[idx] = estilo_rojo_critico
+        elif col == "errores" and pd.notna(val) and es_invalida:
+            estilos[idx] = estilo_texto_error
+        
+        # Resaltar la variable numérica específica que causó la anomalía
+        elif col == "temperatura" and pd.notna(val) and (val < -10.0 or val > 45.0):
+            estilos[idx] = estilo_rojo_critico
+        elif col == "humedad" and pd.notna(val) and (val < 0.0 or val > 100.0):
+            estilos[idx] = estilo_rojo_critico
+        elif col == "presion" and pd.notna(val) and (val < 800.0 or val > 1100.0):
+            estilos[idx] = estilo_rojo_critico
+        elif col == "precipitacion" and pd.notna(val) and (val < 0.0 or val > 300.0):
+            estilos[idx] = estilo_rojo_critico
+        elif col == "viento" and pd.notna(val) and (val < 0.0 or val > 150.0):
+            estilos[idx] = estilo_rojo_critico
+        elif col == "voltaje_bateria" and pd.notna(val) and (val < 2.5 or val > 5.0):
+            estilos[idx] = estilo_rojo_critico
+        elif col == "rssi" and pd.notna(val) and (val < -120 or val > 0):
+            estilos[idx] = estilo_rojo_critico
+
+    return estilos
+
+# Aplicar estilo condicional
+df_estilizado = df_tabla.style.apply(resaltar_anomalias_celdas, axis=1)
+
 st.dataframe(
-    df_sorted[[
-        "estacion_id",
-        "timestamp",
-        "temperatura",
-        "humedad",
-        "presion",
-        "precipitacion",
-        "viento",
-        "voltaje_bateria",
-        "rssi",
-        "estado_calidad",
-    ]].tail(25),
+    df_estilizado,
     use_container_width=True,
+    height=420,
 )
 
 # Footer

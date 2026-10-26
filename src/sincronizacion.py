@@ -19,6 +19,16 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+def verificar_servidor_disponible(timeout: float = 1.0) -> bool:
+    """Verifica rápidamente si el servidor de ingesta central está en línea."""
+    try:
+        url_health = SYNC_ENDPOINT.replace("/ingesta/batch", "/health")
+        resp = requests.get(url_health, timeout=timeout)
+        return resp.status_code == 200
+    except Exception:
+        return False
+
+
 def registrar_log_sincronizacion(enviados: int, exitosos: int, estado: str, mensaje: str = None):
     """Registra el resultado de una sincronización en la base de datos."""
     with get_connection() as conn:
@@ -51,7 +61,7 @@ def sincronizar_lote() -> dict:
     # Intentar enviar con reintentos
     for intento in range(SYNC_MAX_RETRIES):
         try:
-            response = requests.post(SYNC_ENDPOINT, json=payload, timeout=10)
+            response = requests.post(SYNC_ENDPOINT, json=payload, timeout=5)
             
             if response.status_code == 200:
                 ids = [r["id"] for r in registros]
@@ -92,8 +102,18 @@ def sincronizar_lote() -> dict:
 def sincronizar_todo(max_lotes: int = 5) -> dict:
     """
     Sincroniza registros pendientes por lotes.
-    Tiene un límite seguro de max_lotes para evitar bucles en entornos locales.
+    Comprueba previamente la disponibilidad del servidor central para no bloquear en modo Offline.
     """
+    if not verificar_servidor_disponible(timeout=1.0):
+        logger.info("Servidor central en reposo o no disponible. Modo Offline-First activo.")
+        return {
+            "total_enviados": 0,
+            "total_exitosos": 0,
+            "lotes_procesados": 0,
+            "estado": "offline_autonomo",
+            "mensaje": "Servidor central en reposo. Telemetría resguardada localmente en SQLite.",
+        }
+
     total_enviados = 0
     total_exitosos = 0
     lotes_procesados = 0

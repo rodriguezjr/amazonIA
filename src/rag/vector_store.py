@@ -223,3 +223,13 @@ class AmazonIAVectorStore:
         except Exception as e:
             logger.error("Error buscando en Qdrant: %s", e)
             return []
+
+
+def cerrar_clientes_qdrant():
+    """Cierra limpiamente las conexiones abiertas de Qdrant."""
+    for cliente in list(AmazonIAVectorStore._clientes_cache.values()):
+        try:
+            cliente.close()
+        except Exception:
+            pass
+    AmazonIAVectorStore._clientes_cache.clear()

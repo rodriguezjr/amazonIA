@@ -102,6 +102,13 @@ def ejecutar_pipeline_completo():
         print(f"     - Capa {capa.upper()}: {info['total_archivos']} archivo(s), {kb} KB")
     print("=" * 65 + "\n")
 
+    # Cerrar limpiamente conexiones Qdrant para evitar avisos del recolector de basura
+    try:
+        from src.rag.vector_store import cerrar_clientes_qdrant
+        cerrar_clientes_qdrant()
+    except Exception:
+        pass
+
 
 if __name__ == "__main__":
     ejecutar_pipeline_completo()
