@@ -15,6 +15,7 @@ from src.database import (
 )
 from src.validacion import validar_telemetria, verificar_alertas
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Inicializa la base de datos al arrancar la API."""
@@ -54,9 +55,6 @@ async def root():
         "documentacion": "/docs",
         "health": "/health",
     }
-
-
-
 
 
 @app.get("/health")
@@ -107,8 +105,8 @@ async def recibir_telemetria(data: TelemetriaInput):
 @app.post("/ingesta/batch")
 async def recibir_telemetria_batch(data: BatchInput):
     """
-    Recibe un lote de registros de telemetría.
-    Útil para la sincronización desde el Edge Gateway.
+    Recibe un lote de registros de telemetría sincronizados desde el Edge Gateway.
+    Se registran con sincronizado=1 para indicar que ya alcanzaron el servidor receptor.
     """
     resultados = []
     
@@ -130,7 +128,7 @@ async def recibir_telemetria_batch(data: BatchInput):
             "errores": resultado["errores"],
         }
         
-        registro_id = insertar_telemetria(registro)
+        registro_id = insertar_telemetria(registro, sincronizado=1)
         resultados.append({
             "id": registro_id,
             "estado_calidad": resultado["estado"],

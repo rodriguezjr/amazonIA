@@ -4,6 +4,7 @@ Diseñado bajo el enfoque Offline-First.
 """
 import sqlite3
 from contextlib import contextmanager
+from typing import Optional
 from src.config import DB_PATH
 
 
@@ -76,16 +77,17 @@ def init_database():
         conn.commit()
 
 
-def insertar_telemetria(registro: dict) -> int:
+def insertar_telemetria(registro: dict, sincronizado: int = 0) -> int:
     """Inserta un registro de telemetría validado."""
+    sinc_val = sincronizado if sincronizado is not None else registro.get("sincronizado", 0)
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO telemetria (
                 estacion_id, timestamp, temperatura, humedad, presion,
                 precipitacion, viento, voltaje_bateria, rssi,
-                estado_calidad, errores
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                estado_calidad, errores, sincronizado
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             registro["estacion_id"],
             registro["timestamp"],
@@ -98,6 +100,7 @@ def insertar_telemetria(registro: dict) -> int:
             registro.get("rssi"),
             registro["estado_calidad"],
             registro.get("errores"),
+            sinc_val,
         ))
         return cursor.lastrowid
 
@@ -184,7 +187,6 @@ def obtener_lecturas_filtradas(
         parametros.append(limite)
         cursor.execute(query, tuple(parametros))
         return [dict(row) for row in cursor.fetchall()]
-
 
 
 def obtener_estadisticas_calidad() -> dict:

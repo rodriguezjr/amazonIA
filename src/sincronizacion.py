@@ -51,13 +51,12 @@ def sincronizar_lote() -> dict:
     # Intentar enviar con reintentos
     for intento in range(SYNC_MAX_RETRIES):
         try:
-            response = requests.post(SYNC_ENDPOINT, json=payload, timeout=30)
+            response = requests.post(SYNC_ENDPOINT, json=payload, timeout=10)
             
             if response.status_code == 200:
                 ids = [r["id"] for r in registros]
                 marcar_como_sincronizados(ids)
                 
-                resultado = response.json()
                 logger.info(f"Sincronización exitosa: {len(ids)} registros")
                 registrar_log_sincronizacion(
                     len(ids), len(ids), "exitoso",
@@ -90,15 +89,20 @@ def sincronizar_lote() -> dict:
     }
 
 
-def sincronizar_todo() -> dict:
-    """Sincroniza todos los registros pendientes."""
+def sincronizar_todo(max_lotes: int = 5) -> dict:
+    """
+    Sincroniza registros pendientes por lotes.
+    Tiene un límite seguro de max_lotes para evitar bucles en entornos locales.
+    """
     total_enviados = 0
     total_exitosos = 0
+    lotes_procesados = 0
     
-    while True:
+    while lotes_procesados < max_lotes:
         resultado = sincronizar_lote()
         total_enviados += resultado["total"]
         total_exitosos += resultado["exitosos"]
+        lotes_procesados += 1
         
         if resultado["total"] == 0 or resultado["estado"] == "fallido":
             break
@@ -106,6 +110,7 @@ def sincronizar_todo() -> dict:
     return {
         "total_enviados": total_enviados,
         "total_exitosos": total_exitosos,
+        "lotes_procesados": lotes_procesados,
         "estado": "completado" if total_exitosos == total_enviados else "parcial",
     }
 

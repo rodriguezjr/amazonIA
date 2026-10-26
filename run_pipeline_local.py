@@ -37,7 +37,7 @@ def ejecutar_pipeline_completo():
     print("[1/5] Sincronizacion Edge Buffer...")
     try:
         from src.sincronizacion import sincronizar_todo
-        res_sync = sincronizar_todo()
+        res_sync = sincronizar_todo(max_lotes=2)
         print(f"      [OK] Sincronizacion: {res_sync}")
     except Exception as e:
         print(f"      [INFO] Edge Gateway en reposo / local: {e}")
